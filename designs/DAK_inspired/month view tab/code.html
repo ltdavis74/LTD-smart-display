@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#9ca9b5",
+                        "inverse-primary": "#506071",
+                        "on-primary-fixed": "#0c1d2b",
+                        "on-error": "#690005",
+                        "surface-dim": "#121416",
+                        "outline-variant": "#43474c",
+                        "secondary-fixed": "#bcf0ae",
+                        "surface": "#121416",
+                        "secondary": "#a1d494",
+                        "inverse-on-surface": "#2f3133",
+                        "on-tertiary-fixed": "#101d26",
+                        "surface-container-low": "#1a1c1e",
+                        "surface-container": "#1e2022",
+                        "primary": "#b8c8db",
+                        "on-surface": "#e2e2e5",
+                        "on-surface-variant": "#c4c6cd",
+                        "tertiary-fixed-dim": "#bbc8d5",
+                        "on-secondary-fixed-variant": "#23501e",
+                        "inverse-surface": "#e2e2e5",
+                        "secondary-container": "#23501e",
+                        "surface-variant": "#333537",
+                        "primary-fixed-dim": "#b8c8db",
+                        "surface-tint": "#b8c8db",
+                        "on-primary-container": "#98a9bb",
+                        "background": "#121416",
+                        "on-primary-fixed-variant": "#394858",
+                        "primary-container": "#2e3e4d",
+                        "on-background": "#e2e2e5",
+                        "surface-bright": "#37393b",
+                        "on-secondary-fixed": "#002201",
+                        "tertiary-fixed": "#d7e4f1",
+                        "surface-container-high": "#282a2c",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#333537",
+                        "on-primary": "#223241",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary": "#25323c",
+                        "tertiary": "#bbc8d5",
+                        "outline": "#8e9197",
+                        "on-tertiary-fixed-variant": "#3c4853",
+                        "surface-container-lowest": "#0c0e10",
+                        "error-container": "#93000a",
+                        "primary-fixed": "#d3e4f8",
+                        "tertiary-container": "#313e48",
+                        "on-secondary": "#0a3909",
+                        "secondary-fixed-dim": "#a1d494",
+                        "on-secondary-container": "#90c283"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                },
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .glass-panel {
+            background: rgba(51, 53, 55, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .ghost-border {
+            outline: 1px solid rgba(142, 145, 151, 0.15);
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface w-[1024px] h-[600px] overflow-hidden relative selection:bg-primary selection:text-on-primary">
+<!-- Background Image Layer -->
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-60" data-alt="Moody aerial shot of a Canadian lake surrounded by dark pine forests and grey granite outcrops under a misty dawn sky" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_uTeWc_5SIujRs_Lf2rLnMeVvzM_ZYnPDxPe1fBu1kAXw2rC5GME4uuP5Oulcn_87qwGGD3j9JZP0icjUManV2VlZ2HU1QgM1B5UrsacHFhk77FQareqFU5kqQFnSZ-GURFVcENCXIy25ykh1-g-ENZGu46ZCTeOZV8H4vvr00LFH8PB9CLAVPVZ7oQPmkur8zD8MNN93sgbq_8H-xe4sbivu16WssCQ_miUn07rv2Ii9U4F9qLmob-oncIh1qC76JbdKn5eJJf2K"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent opacity-80"></div>
+</div>
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full px-10 py-6 z-50 flex justify-between items-center max-w-[1024px] bg-slate-900/40 backdrop-blur-xl shadow-2xl shadow-black/20">
+<div class="text-2xl font-extrabold text-slate-100 tracking-tighter">Boreal Calendar</div>
+<div class="flex items-center space-x-8 font-manrope font-bold tracking-tight uppercase text-sm">
+<a class="text-blue-300 border-b-2 border-blue-400 pb-1 hover:text-white transition-colors duration-300" href="#">Month</a>
+<a class="text-slate-400 hover:text-white transition-colors duration-300" href="#">Week</a>
+<a class="text-slate-400 hover:text-white transition-colors duration-300" href="#">Day</a>
+</div>
+<div class="flex items-center space-x-6 text-blue-200 dark:text-blue-100">
+<button class="material-symbols-outlined scale-95 duration-200">today</button>
+<button class="material-symbols-outlined scale-95 duration-200">filter_list</button>
+</div>
+</nav>
+<!-- SideNavBar (Sentinel Style) -->
+<aside class="fixed left-0 top-0 h-[600px] z-40 w-24 rounded-r-3xl bg-slate-900/60 backdrop-blur-2xl shadow-[20px_0_40px_rgba(12,14,16,0.4)] flex flex-col items-center py-8 space-y-12">
+<div class="mb-4">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high ghost-border">
+<img class="w-full h-full object-cover" data-alt="Close-up portrait of a man with a rugged beard in soft natural outdoor lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBG1n9hPrraIa-1DXbchjZjnSiLyS9lH1r__o7bun590flcqem7TTYFMxkBZLkGlkpZH0pRRQ6DuqiZ7S871xg9OPHujxRZ69ytRJGmmNWFW2QIJ3Jl0pErLtJbx7mvIQe74X_d-Wq_FO-xlKwVoybZWImZ1k4iQdxNQ78hQ5qNgTiA37tErSTPHrV6Yn3CiqgLRWWKOy2CqhurmjFu982vAWSuf7UOJpoJp6tyf967sxtosTGS95cqFUJgIdNVx9yajK1I14Hw3Y68"/>
+</div>
+</div>
+<nav class="flex flex-col items-center space-y-8 w-full">
+<div class="flex flex-col items-center justify-center bg-emerald-900/40 text-emerald-300 rounded-xl p-4 transition-transform active:scale-90 font-manrope font-medium text-lg">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="text-[10px] uppercase tracking-widest">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-500 p-4 hover:bg-slate-800/50 transition-colors rounded-xl font-manrope font-medium text-lg">
+<span class="material-symbols-outlined mb-1">cloudy_snowing</span>
+<span class="text-[10px] uppercase tracking-widest">Weather</span>
+</div>
+<div class="flex flex-col items-center justify-center text-slate-500 p-4 hover:bg-slate-800/50 transition-colors rounded-xl font-manrope font-medium text-lg">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span class="text-[10px] uppercase tracking-widest">Settings</span>
+</div>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-24 pt-24 pb-8 px-10 h-full grid grid-cols-12 gap-8 relative z-10">
+<!-- Left Section: Month View -->
+<section class="col-span-8 flex flex-col h-full">
+<div class="mb-6">
+<h1 class="text-5xl font-extrabold tracking-tight text-on-surface">November <span class="font-light text-primary">2024</span></h1>
+<p class="text-on-surface-variant font-medium tracking-wide mt-1">Ontario, Canada • 14°C Cloudy</p>
+</div>
+<!-- Calendar Grid -->
+<div class="flex-grow glass-panel ghost-border rounded-full p-4 grid grid-cols-7 gap-1 overflow-hidden">
+<!-- Day Labels -->
+<div class="text-center py-2 text-[10px] font-bold uppercase tracking-widest text-on-tertiary-container">Sun</div>
+<div class="text-center py-2 text-[10px] font-bold uppercase tracking-widest text-on-tertiary-container">Mon</div>
+<div class="text-center py-2 text-[10px] font-bold uppercase tracking-widest text-on-tertiary-container">Tue</div>
+<div class="text-center py-2 text-[10px] font-bold uppercase tracking-widest text-on-tertiary-container">Wed</div>
+<div class="text-center py-2 text-[10px] font-bold uppercase tracking-widest text-on-tertiary-container">Thu</div>
+<div class="text-center py-2 text-[10px] font-bold uppercase tracking-widest text-on-tertiary-container">Fri</div>
+<div class="text-center py-2 text-[10px] font-bold uppercase tracking-widest text-on-tertiary-container">Sat</div>
+<!-- Calendar Days -->
+<!-- Prev Month Buffer -->
+<div class="aspect-square flex items-center justify-center text-on-surface-variant/30 text-sm">27</div>
+<div class="aspect-square flex items-center justify-center text-on-surface-variant/30 text-sm">28</div>
+<div class="aspect-square flex items-center justify-center text-on-surface-variant/30 text-sm">29</div>
+<div class="aspect-square flex items-center justify-center text-on-surface-variant/30 text-sm">30</div>
+<div class="aspect-square flex items-center justify-center text-on-surface-variant/30 text-sm">31</div>
+<!-- Current Month -->
+<div class="aspect-square flex flex-col items-center justify-center text-sm relative">
+<span>1</span>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm relative">
+<span>2</span>
+<div class="absolute bottom-2 w-1 h-1 bg-secondary rounded-full"></div>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">3</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">4</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">5</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">6</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">7</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">8</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">9</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm relative bg-primary text-on-primary rounded-xl font-bold shadow-lg shadow-primary/20">
+<span>10</span>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">11</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm relative">
+<span>12</span>
+<div class="absolute bottom-2 flex space-x-0.5">
+<div class="w-1 h-1 bg-tertiary rounded-full"></div>
+<div class="w-1 h-1 bg-secondary rounded-full"></div>
+</div>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">13</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">14</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">15</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">16</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">17</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">18</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">19</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm relative">
+<span>20</span>
+<div class="absolute bottom-2 w-1 h-1 bg-error rounded-full"></div>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">21</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">22</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">23</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">24</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">25</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">26</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">27</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">28</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">29</div>
+<div class="aspect-square flex flex-col items-center justify-center text-sm">30</div>
+</div>
+</section>
+<!-- Right Section: Upcoming Events -->
+<aside class="col-span-4 h-full flex flex-col overflow-hidden">
+<div class="mb-4 flex items-center justify-between">
+<h2 class="text-xl font-bold tracking-tight text-primary">Upcoming</h2>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">3 Events</span>
+</div>
+<div class="flex-grow space-y-4 no-scrollbar overflow-y-auto pr-2">
+<!-- Event Card 1 -->
+<div class="glass-panel ghost-border rounded-xl p-4 flex items-start space-x-4 border-l-4 border-secondary">
+<div class="flex flex-col items-center">
+<span class="text-[10px] font-bold uppercase text-on-surface-variant">Nov</span>
+<span class="text-2xl font-extrabold text-on-surface leading-none">12</span>
+</div>
+<div class="flex-grow">
+<h3 class="text-md font-bold text-on-surface">Canoe Trip Meeting</h3>
+<p class="text-xs text-on-surface-variant mt-1">9:00 AM • Boundary Waters Outfitter</p>
+</div>
+</div>
+<!-- Event Card 2 -->
+<div class="glass-panel ghost-border rounded-xl p-4 flex items-start space-x-4 border-l-4 border-tertiary">
+<div class="flex flex-col items-center">
+<span class="text-[10px] font-bold uppercase text-on-surface-variant">Nov</span>
+<span class="text-2xl font-extrabold text-on-surface leading-none">12</span>
+</div>
+<div class="flex-grow">
+<h3 class="text-md font-bold text-on-surface">Supply Inventory</h3>
+<p class="text-xs text-on-surface-variant mt-1">1:30 PM • Main Depot</p>
+</div>
+</div>
+<!-- Event Card 3 -->
+<div class="glass-panel ghost-border rounded-xl p-4 flex items-start space-x-4 border-l-4 border-error">
+<div class="flex flex-col items-center">
+<span class="text-[10px] font-bold uppercase text-on-surface-variant">Nov</span>
+<span class="text-2xl font-extrabold text-on-surface leading-none">20</span>
+</div>
+<div class="flex-grow">
+<h3 class="text-md font-bold text-on-surface">Property Tax Due</h3>
+<p class="text-xs text-on-surface-variant mt-1">EOD • Regional Office</p>
+</div>
+</div>
+<!-- Decorative Asset -->
+<div class="mt-8 rounded-xl overflow-hidden h-32 relative ghost-border">
+<img class="w-full h-full object-cover" data-alt="Macrophotography of vibrant green moss growing on a piece of dark jagged granite rock with water droplets" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBSqtjqHvz3l6F7RXrwrLWypxti-QsvKwuDu92G0YiUrV5xVGoD4gar7bYQ9w1i90llQfPRMi-rM5aVr8QKA4YmfJKkL5TrRKGk9Ty-pB8Ajbic5W1kzSbzZ5vVHWCcrx-VqWhHA287ZikIbFC1xisi9SIPXICasTEbmpCyjIjLXgPpMxr9DEA1fjxETc7KTaP9uJU0o7MkM3qe9754UzuJhGQe9eynqKZmsPXKngzyfvUjNzMLhBdkt4BbVkyR3dUqiqm7jTL-CNmX"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-dim/80 to-transparent flex items-end p-3">
+<span class="text-[10px] font-bold uppercase tracking-widest text-secondary">The Boreal Lens</span>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- FAB for Task/Event -->
+<div class="fixed bottom-8 right-8 z-50">
+<button class="w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</div>
+</body></html>

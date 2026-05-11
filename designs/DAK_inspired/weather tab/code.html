@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Boreal Lens - Smart Weather Display</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#313e48",
+                    "error": "#ffb4ab",
+                    "surface-tint": "#b8c8db",
+                    "on-secondary-fixed": "#002201",
+                    "surface-container-highest": "#333537",
+                    "primary-fixed": "#d3e4f8",
+                    "on-secondary-container": "#90c283",
+                    "on-background": "#e2e2e5",
+                    "on-surface": "#e2e2e5",
+                    "inverse-surface": "#e2e2e5",
+                    "background": "#121416",
+                    "primary": "#b8c8db",
+                    "on-tertiary": "#25323c",
+                    "on-secondary": "#0a3909",
+                    "on-primary": "#223241",
+                    "surface-container-high": "#282a2c",
+                    "secondary": "#a1d494",
+                    "surface-container-lowest": "#0c0e10",
+                    "tertiary-fixed": "#d7e4f1",
+                    "error-container": "#93000a",
+                    "on-primary-fixed": "#0c1d2b",
+                    "outline": "#8e9197",
+                    "on-surface-variant": "#c4c6cd",
+                    "on-primary-fixed-variant": "#394858",
+                    "inverse-primary": "#506071",
+                    "surface-variant": "#333537",
+                    "surface-bright": "#37393b",
+                    "on-secondary-fixed-variant": "#23501e",
+                    "on-error": "#690005",
+                    "tertiary-fixed-dim": "#bbc8d5",
+                    "on-tertiary-fixed": "#101d26",
+                    "secondary-container": "#23501e",
+                    "inverse-on-surface": "#2f3133",
+                    "on-error-container": "#ffdad6",
+                    "on-tertiary-fixed-variant": "#3c4853",
+                    "secondary-fixed": "#bcf0ae",
+                    "surface": "#121416",
+                    "surface-dim": "#121416",
+                    "primary-container": "#2e3e4d",
+                    "on-tertiary-container": "#9ca9b5",
+                    "surface-container": "#1e2022",
+                    "secondary-fixed-dim": "#a1d494",
+                    "outline-variant": "#43474c",
+                    "on-primary-container": "#98a9bb",
+                    "surface-container-low": "#1a1c1e",
+                    "tertiary": "#bbc8d5",
+                    "primary-fixed-dim": "#b8c8db"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Manrope', sans-serif;
+            overflow: hidden; /* Prevent scrolling on 1024x600 fixed display */
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background-color: rgba(51, 53, 55, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .ghost-border {
+            outline: 1px solid rgba(142, 145, 151, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface h-[600px] w-[1024px] relative selection:bg-primary selection:text-on-primary">
+<!-- Background Layer -->
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover" data-alt="Dusk landscape of a calm Canadian lake surrounded by dark pine forests and ancient granite rocks under a moody blue twilight sky." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgTGiDBQwd9Ey3418Gk2QgvHkOG8tNBqaeSNT6bfoDP_26Pj42phmLRsXIO52nVN_-9P_gT5cLzAhHX8o0Cx3V_4CemkEi-QsAtb-BgPE9HbBVC_yPtql4LF0Sl4ZcMnZAkD7ClrxCyyBOgdbbX29gDb8xKHZfdlxc7WUPGfJ-ge-o2ajI2EzwE0hl7Ayscbt2Ig1g9rOJ8q4lYiGEel8w-SF3jrNdy4LbXLKm52rLuZIQwApbiG5LJiy0wASOMJH25J3tz3kwlhPP"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent"></div>
+</div>
+<!-- Top Navigation Shell (The Anchor) -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-10 py-6">
+<div class="text-2xl font-bold text-slate-100 tracking-tighter font-['Manrope']">Boreal Lens</div>
+<div class="flex gap-6 items-center">
+<span class="text-slate-400 text-sm font-medium tracking-widest uppercase">Boundary Waters</span>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-slate-200">sync</span>
+<span class="material-symbols-outlined text-slate-200">settings</span>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="relative z-10 px-10 pt-24 pb-6 flex flex-col justify-between h-full max-h-[600px]">
+<!-- Top Section: Hero + Quick Stats -->
+<div class="flex justify-between items-end">
+<!-- Hero Time & Temp -->
+<div class="flex flex-col">
+<div class="flex items-baseline gap-4">
+<h1 class="text-8xl font-extrabold tracking-tighter text-white drop-shadow-xl">14:42</h1>
+<span class="text-2xl font-light text-primary tracking-widest">PM</span>
+</div>
+<div class="flex items-center gap-6 mt-[-10px]">
+<span class="text-7xl font-light text-primary">-12°</span>
+<div class="flex flex-col">
+<span class="text-xl font-semibold text-on-surface">Mostly Cloudy</span>
+<span class="text-sm text-on-surface-variant font-medium tracking-wide">Feels like -18°</span>
+</div>
+</div>
+</div>
+<!-- 4 Quick Cards -->
+<div class="grid grid-cols-2 gap-3 mb-2">
+<div class="glass-panel ghost-border rounded-xl p-4 w-40 flex flex-col gap-1">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">air</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Wind</span>
+</div>
+<span class="text-xl font-bold">14 <span class="text-xs font-normal">km/h</span></span>
+</div>
+<div class="glass-panel ghost-border rounded-xl p-4 w-40 flex flex-col gap-1">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">humidity_percentage</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Humidity</span>
+</div>
+<span class="text-xl font-bold">68%</span>
+</div>
+<div class="glass-panel ghost-border rounded-xl p-4 w-40 flex flex-col gap-1">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">light_mode</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">UV Index</span>
+</div>
+<span class="text-xl font-bold">1 <span class="text-xs font-normal">Low</span></span>
+</div>
+<div class="glass-panel ghost-border rounded-xl p-4 w-40 flex flex-col gap-1">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">water_drop</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Precip</span>
+</div>
+<span class="text-xl font-bold">5%</span>
+</div>
+</div>
+</div>
+<!-- Middle & Bottom Section: Forecast Container -->
+<div class="flex flex-col gap-4 mt-4">
+<!-- Hourly Forecast -->
+<section>
+<h2 class="text-sm font-bold tracking-[0.2em] text-primary uppercase mb-3">Hourly Forecast</h2>
+<div class="flex gap-2">
+<!-- Hourly Item Active -->
+<div class="flex-1 glass-panel bg-primary-container/40 ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2 border-b-2 border-primary">
+<span class="text-[10px] font-bold text-primary tracking-widest">NOW</span>
+<span class="material-symbols-outlined text-2xl text-white" style="font-variation-settings: 'FILL' 1;">cloud</span>
+<span class="text-lg font-bold text-white">-12°</span>
+</div>
+<!-- Hourly Items -->
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-medium text-on-surface-variant tracking-widest uppercase">15:00</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">cloud</span>
+<span class="text-lg font-bold">-12°</span>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-medium text-on-surface-variant tracking-widest uppercase">16:00</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">cloud_queue</span>
+<span class="text-lg font-bold">-13°</span>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-medium text-on-surface-variant tracking-widest uppercase">17:00</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">ac_unit</span>
+<span class="text-lg font-bold">-14°</span>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-medium text-on-surface-variant tracking-widest uppercase">18:00</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">ac_unit</span>
+<span class="text-lg font-bold">-16°</span>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-medium text-on-surface-variant tracking-widest uppercase">19:00</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">bedtime</span>
+<span class="text-lg font-bold">-17°</span>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-medium text-on-surface-variant tracking-widest uppercase">20:00</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">bedtime</span>
+<span class="text-lg font-bold">-18°</span>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-medium text-on-surface-variant tracking-widest uppercase">21:00</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">bedtime</span>
+<span class="text-lg font-bold">-19°</span>
+</div>
+</div>
+</section>
+<!-- Daily Forecast -->
+<section>
+<h2 class="text-sm font-bold tracking-[0.2em] text-secondary uppercase mb-3">Daily Forecast</h2>
+<div class="flex gap-2">
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase">MON</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">ac_unit</span>
+<div class="flex flex-col items-center leading-tight">
+<span class="text-md font-bold">-10°</span>
+<span class="text-[10px] text-on-surface-variant">-18°</span>
+</div>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase">TUE</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">cloud</span>
+<div class="flex flex-col items-center leading-tight">
+<span class="text-md font-bold">-8°</span>
+<span class="text-[10px] text-on-surface-variant">-12°</span>
+</div>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase">WED</span>
+<span class="material-symbols-outlined text-2xl text-slate-300" style="font-variation-settings: 'FILL' 1;">partly_cloudy_day</span>
+<div class="flex flex-col items-center leading-tight">
+<span class="text-md font-bold">-4°</span>
+<span class="text-[10px] text-on-surface-variant">-9°</span>
+</div>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase">THU</span>
+<span class="material-symbols-outlined text-2xl text-slate-300" style="font-variation-settings: 'FILL' 1;">sunny</span>
+<div class="flex flex-col items-center leading-tight">
+<span class="text-md font-bold">0°</span>
+<span class="text-[10px] text-on-surface-variant">-5°</span>
+</div>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase">FRI</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">ac_unit</span>
+<div class="flex flex-col items-center leading-tight">
+<span class="text-md font-bold">-6°</span>
+<span class="text-[10px] text-on-surface-variant">-14°</span>
+</div>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase">SAT</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">cloudy_snowing</span>
+<div class="flex flex-col items-center leading-tight">
+<span class="text-md font-bold">-11°</span>
+<span class="text-[10px] text-on-surface-variant">-15°</span>
+</div>
+</div>
+<div class="flex-1 glass-panel ghost-border rounded-xl p-3 flex flex-col items-center justify-center gap-2">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase">SUN</span>
+<span class="material-symbols-outlined text-2xl text-slate-300">ac_unit</span>
+<div class="flex flex-col items-center leading-tight">
+<span class="text-md font-bold">-13°</span>
+<span class="text-[10px] text-on-surface-variant">-20°</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Subtle Overlay Gradient for Depth at the bottom -->
+<div class="absolute bottom-0 w-full h-24 bg-gradient-to-t from-surface to-transparent z-5 pointer-events-none"></div>
+</body></html>

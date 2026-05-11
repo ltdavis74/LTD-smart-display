@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendar Card Simulator — 1024×600 · Boreal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    /*
+     * ══════════════════════════════════════════════════════════════════════════
+     * BOREAL / DAK-INSPIRED AESTHETIC  ·  "The Silent Sentinel"
+     * Derived from Google Stitch DAK_inspired exports in /designs/DAK_inspired
+     *
+     * Boreal color tokens:
+     *   surface                  #121416
+     *   surface-container-low    #1a1c1e
+     *   surface-container        #1e2022
+     *   surface-container-high   #282a2c
+     *   surface-container-highest #333537
+     *   primary                  #b8c8db  (dusty slate-blue)
+     *   primary-container        #2e3e4d
+     *   secondary                #a1d494  (pine green)
+     *   tertiary                 #bbc8d5  (slate)
+     *   on-surface               #e2e2e5
+     *   on-surface-variant       #c4c6cd
+     *   on-tertiary-container    #9ca9b5
+     *   outline-variant          #43474c
+     *   error / holiday          #ffb4ab
+     *   on-primary               #223241
+     *
+     * Layout notes per view:
+     *   Day   — all-day chips + featured "Next Up" glass card + pill event rows
+     *   Week  — large extralight date numbers + glass event cards per column
+     *   Month — calendar grid (left ~60%) + Upcoming sidebar (right ~40%)
+     *
+     * Map-back to app.js:
+     *   CSS inside the BEGIN/END markers → injectCalendarGridStyles()
+     *   Render function HTML → renderDayView(), renderWeekGrid(), renderMonthGrid()
+     *   agenda-container / agenda-header overrides → styles.css
+     * ══════════════════════════════════════════════════════════════════════════
+     */
+
+    /* ── Simulator chrome ────────────────────────────────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #0a0c0f;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: 'Manrope', sans-serif;
+      overflow: hidden;
+    }
+    .sim-label {
+      font-size: 10px; color: rgba(255,255,255,0.18);
+      font-family: monospace; letter-spacing: 0.1em;
+      margin-bottom: 5px; flex-shrink: 0; text-transform: uppercase;
+    }
+    .sim-frame {
+      width: 1024px; height: 600px;
+      overflow: hidden; position: relative;
+      border: 1px solid rgba(184,200,219,0.08);
+      flex-shrink: 0;
+    }
+
+    /* ── Photo background — crossfade between Boundary Waters images ──────── */
+    .sim-photo-bg {
+      position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .sim-photo {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; object-fit: cover;
+      transition: opacity 1.8s ease-in-out;
+    }
+    .sim-photo.hidden { opacity: 0; }
+    /* Dark overlay: overall dim + bottom-heavy gradient for UI legibility */
+    .sim-photo-overlay {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        linear-gradient(to top,
+          rgba(12,14,16,0.88) 0%,
+          rgba(12,14,16,0.45) 35%,
+          rgba(12,14,16,0.22) 70%,
+          rgba(12,14,16,0.18) 100%),
+        linear-gradient(160deg,
+          rgba(12,14,16,0.25) 0%,
+          transparent 60%);
+    }
+
+    /* ── Simulator overrides (map back: agenda-container → styles.css) ─── */
+    .agenda-container {
+      position: relative; z-index: 1;
+      width: 100%; height: 100%;
+      background: transparent;
+      display: flex; flex-direction: column;
+      color: #e2e2e5;
+      font-family: 'Manrope', sans-serif;
+    }
+
+    /* agenda-header: glass top bar */
+    .agenda-header {
+      display: flex; align-items: center; gap: 16px;
+      padding: 13px 24px;
+      background: rgba(12, 14, 16, 0.7);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(67,71,76,0.35);
+    }
+    .agenda-header i { color: #b8c8db; font-size: 17px; flex-shrink: 0; opacity: 0.7; }
+    .agenda-header > span { font-weight: 800; font-size: 15px; color: #e2e2e5; flex: 1; letter-spacing: -0.02em; }
+    .header-time-display { font-size: 11px; color: #c4c6cd; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+    .ha-back-btn { background: none; border: none; color: #c4c6cd; font-size: 15px; cursor: pointer; padding: 8px; border-radius: 6px; }
+    .settings-btn {
+      background: none; border: none; color: rgba(196,198,205,0.4); font-size: 15px;
+      cursor: pointer; padding: 8px; border-radius: 6px;
+      min-width: 42px; min-height: 42px; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: color 0.15s;
+    }
+    .settings-btn:hover { color: #c4c6cd; }
+    .agenda-content { display: none; }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+     * BEGIN injectCalendarGridStyles() — copy verbatim into app.js
+     * ══════════════════════════════════════════════════════════════════════════ */
+
+    /* ── Toggle: text-only tabs with primary underline (Stitch top-nav style) */
+    .cal-view-toggle {
+      display: inline-flex; gap: 2px; flex-shrink: 0;
+    }
+    .cal-toggle-btn {
+      background: none; border: none;
+      border-bottom: 2px solid transparent;
+      color: rgba(196,198,205,0.55);
+      padding: 5px 14px 4px 14px;
+      font-size: 11px; font-weight: 800;
+      cursor: pointer; font-family: inherit;
+      white-space: nowrap; text-transform: uppercase; letter-spacing: 0.12em;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .cal-toggle-btn:hover { color: #e2e2e5; }
+    .cal-toggle-btn.active { color: #b8c8db; border-bottom-color: #b8c8db; }
+
+    /* ── Period title (sub-headers inside each view) */
+    .cal-period-title {
+      font-size: 15px; font-weight: 700; color: #e2e2e5;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      text-align: center; flex: 1; min-width: 0; letter-spacing: -0.02em;
+    }
+
+    /* ── Ghost nav buttons */
+    .cal-nav-btn {
+      background: rgba(51,53,55,0.25);
+      border: 1px solid rgba(67,71,76,0.35);
+      color: #c4c6cd; border-radius: 7px;
+      width: 36px; height: 36px; font-size: 19px; line-height: 1;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s, color 0.15s; flex-shrink: 0; font-family: inherit;
+    }
+    .cal-nav-btn:hover  { background: rgba(51,53,55,0.55); color: #e2e2e5; }
+    .cal-nav-btn:active { background: rgba(51,53,55,0.8); }
+    .cal-nav-arrow { width: 36px; height: 30px; font-size: 15px; border-radius: 6px; }
+    .cal-nav-btn.disabled, .cal-nav-btn:disabled { opacity: 0.18; pointer-events: none; }
+
+    /* ── Ambient shortcut button (Card 0) */
+    .cal-ambient-shortcut-btn {
+      position: absolute; bottom: 18px; right: 18px; z-index: 10;
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(18,20,22,0.72); border: 1px solid rgba(184,200,219,0.3);
+      color: #b8c8db; border-radius: 8px; padding: 8px 16px;
+      font-size: 13px; font-weight: 700; letter-spacing: 0.05em;
+      cursor: pointer; font-family: inherit; backdrop-filter: blur(12px);
+      transition: background 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .cal-ambient-shortcut-btn:active { background: rgba(46,62,77,0.85); }
+
+    /* ── View containers: full-bleed surface, no card rounding */
+    .cal-month-view, .cal-week-view, .cal-day-view {
+      display: flex; flex-direction: column;
+      flex: 1; overflow: hidden;
+      background: transparent;
+      padding: 0; margin: 0;
+    }
+
+    /* Sub-headers */
+    .cal-month-header, .cal-week-header, .cal-day-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 24px 10px 24px; flex-shrink: 0;
+    }
+
+    /* ── Auto-return bar */
+    .cal-return-bar {
+      height: 2px; background: rgba(67,71,76,0.3);
+      margin: 0; overflow: hidden; flex-shrink: 0;
+    }
+    .cal-return-progress {
+      height: 100%; background: rgba(184,200,219,0.4);
+      width: 100%; transition: none;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+     * DAY VIEW
+     * Layout: all-day chips → featured "Next Up" glass card → pill event rows
+     * ════════════════════════════════════════════════════════════════════════ */
+
+    .cal-day-events {
+      flex: 1; overflow-y: auto; padding: 10px 24px 12px 24px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .cal-day-events::-webkit-scrollbar { display: none; }
+
+    /* All-day chips */
+    .cal-allday-strip {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;
+    }
+    .cal-allday-chip {
+      display: inline-flex; align-items: center;
+      background: rgba(46,62,77,0.5);
+      border: 1px solid rgba(184,200,219,0.2);
+      color: #b8c8db; font-size: 11px; font-weight: 700;
+      padding: 4px 12px 4px 10px; border-radius: 9999px;
+      letter-spacing: 0.04em;
+    }
+    .cal-allday-chip::before {
+      content: ''; display: inline-block;
+      width: 5px; height: 5px; border-radius: 50%;
+      background: #b8c8db; margin-right: 7px; flex-shrink: 0;
+    }
+    .cal-allday-chip.holiday {
+      color: #ffb4ab; border-color: rgba(255,180,171,0.25);
+      background: rgba(147,0,10,0.18);
+    }
+    .cal-allday-chip.holiday::before { background: #ffb4ab; }
+    .cal-allday-chip.secondary {
+      color: #a1d494; border-color: rgba(161,212,148,0.25);
+      background: rgba(35,80,30,0.25);
+    }
+    .cal-allday-chip.secondary::before { background: #a1d494; }
+
+    /* Featured "Next Up" card — glass panel, Stitch primary-container style */
+    .cal-featured-card {
+      background: rgba(46,62,77,0.55);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-radius: 14px; padding: 16px 20px;
+      margin-bottom: 10px;
+      border-left: 3px solid #b8c8db;
+      box-shadow: 0 8px 24px rgba(12,14,16,0.35);
+    }
+    .cal-featured-card.allday { border-left-color: #a1d494; }
+    .cal-featured-card.holiday { border-left-color: #ffb4ab; }
+    .cal-featured-label {
+      font-size: 10px; font-weight: 800; color: #b8c8db;
+      text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 5px;
+    }
+    .cal-featured-title {
+      font-size: 22px; font-weight: 700; color: #e2e2e5;
+      letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 7px;
+    }
+    .cal-featured-time {
+      font-size: 13px; color: #c4c6cd; font-weight: 600;
+      letter-spacing: 0.04em; margin-bottom: 3px;
+    }
+    .cal-featured-location {
+      font-size: 11px; color: #9ca9b5; font-weight: 500; margin-top: 2px;
+    }
+
+    /* Pill event rows — Stitch "surface-container-low rounded-full" style */
+    .cal-event-pill {
+      display: flex; align-items: center;
+      background: rgba(26,28,30,0.8);
+      border-radius: 9999px;
+      padding: 11px 18px; margin-bottom: 7px;
+      transition: background 0.12s;
+    }
+    .cal-event-pill:hover { background: rgba(30,32,34,0.9); }
+    .cal-event-pill:last-child { margin-bottom: 0; }
+    .cal-pill-time {
+      font-size: 11px; font-weight: 700; color: #c4c6cd;
+      text-align: right; min-width: 62px; flex-shrink: 0;
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .cal-pill-divider {
+      width: 1px; height: 18px;
+      background: rgba(67,71,76,0.6);
+      margin: 0 14px; flex-shrink: 0;
+    }
+    .cal-pill-title {
+      font-size: 14px; font-weight: 600; color: #e2e2e5;
+      flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      letter-spacing: -0.01em;
+    }
+
+    .cal-day-empty {
+      color: #c4c6cd; font-size: 14px; font-weight: 500;
+      text-align: center; padding: 56px 0; letter-spacing: 0.04em;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+     * WEEK VIEW
+     * Large extralight date numbers, glass event cards, tonal column bg
+     * ════════════════════════════════════════════════════════════════════════ */
+
+    .cal-week-view { padding: 0; }
+    .cal-grid-week {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 5px; flex: 1; min-height: 0;
+      padding: 0 20px 10px 20px; overflow: hidden;
+    }
+    .cal-week-col {
+      display: flex; flex-direction: column;
+      border-radius: 10px; overflow: hidden; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      background: rgba(26,28,30,0.6);
+      border: none; min-height: 0;
+    }
+    .cal-week-col.today { background: rgba(26,40,52,0.7); }
+
+    /* Column header: DOW label tiny + date number LARGE (Stitch extralight display) */
+    .cal-week-col-header {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 4px 8px 4px; flex-shrink: 0;
+    }
+    .cal-week-dow {
+      font-size: 9px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.15em; color: rgba(196,198,205,0.5);
+      line-height: 1; margin-bottom: 3px;
+    }
+    .cal-week-col.today .cal-week-dow { color: #b8c8db; }
+    /* Large extralight date number — the Stitch "display" treatment */
+    .cal-week-date-num {
+      font-size: 30px; font-weight: 200; letter-spacing: -0.04em;
+      color: rgba(226,226,229,0.7); line-height: 1;
+      /* override default circle sizing */
+      width: auto; height: auto; border-radius: 0;
+      background: none !important; box-shadow: none !important;
+    }
+    .cal-week-col.today .cal-week-date-num {
+      color: #b8c8db; font-weight: 700;
+    }
+
+    .cal-week-events {
+      flex: 1; overflow-y: auto; padding: 4px 5px 6px 5px;
+      display: flex; flex-direction: column; gap: 4px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .cal-week-events::-webkit-scrollbar { display: none; }
+
+    .cal-week-event {
+      display: flex; align-items: stretch; border-radius: 6px;
+      overflow: hidden; flex-shrink: 0;
+      background: rgba(51,53,55,0.45);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: none;
+    }
+    .cal-week-event-bar { width: 3px; background: #b8c8db; flex-shrink: 0; }
+    .cal-week-event-bar.allday  { background: #a1d494; }
+    .cal-week-event-bar.holiday { background: #ffb4ab; }
+    .cal-week-event-inner { padding: 5px 6px; min-width: 0; flex: 1; overflow: hidden; }
+    .cal-week-event-time {
+      font-size: 8px; font-weight: 700; color: #c4c6cd;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      line-height: 1.3; text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .cal-week-event-time.allday { color: #a1d494; }
+    .cal-week-event-title {
+      font-size: 10px; font-weight: 600; color: #e2e2e5;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
+    }
+    .cal-week-overflow {
+      font-size: 8px; font-weight: 700; color: rgba(196,198,205,0.5);
+      text-align: center; padding: 3px 0 2px 0; flex-shrink: 0;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    /* "Today" label under date number */
+    .cal-week-today-label {
+      font-size: 8px; font-weight: 800; color: #b8c8db;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      margin-top: 2px; line-height: 1;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
+     * MONTH VIEW
+     * Two-column layout: grid panel (left ~60%) + Upcoming sidebar (right ~40%)
+     * ════════════════════════════════════════════════════════════════════════ */
+
+    .cal-month-view { padding: 0; }
+    /* Body = flex row: grid + sidebar */
+    .cal-month-body {
+      display: flex; gap: 12px; flex: 1; min-height: 0;
+      padding: 0 20px 10px 20px;
+    }
+
+    /* Left: calendar grid panel */
+    .cal-month-main {
+      flex: 1; display: flex; flex-direction: column; min-width: 0;
+      background: rgba(26,28,30,0.55);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-radius: 14px; padding: 14px;
+      /* ghost border per DESIGN.md */
+      outline: 1px solid rgba(142,145,151,0.12);
+    }
+
+    .cal-dow-row {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      text-align: center; margin-bottom: 6px; padding-bottom: 6px;
+      border-bottom: 1px solid rgba(67,71,76,0.4);
+    }
+    .cal-dow-row div {
+      font-size: 9px; font-weight: 800; color: #9ca9b5;
+      text-transform: uppercase; letter-spacing: 0.12em; padding: 2px 0;
+    }
+
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      flex: 1; gap: 2px; align-content: start;
+    }
+    .cal-day-cell {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 4px 2px 3px 2px; border-radius: 7px; cursor: pointer;
+      border: none; min-height: 48px;
+      background: transparent; transition: background 0.12s;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+    }
+    .cal-day-cell:hover   { background: rgba(51,53,55,0.4); }
+    .cal-day-cell:active  { background: rgba(51,53,55,0.65) !important; }
+    .cal-day-cell.has-events { background: rgba(51,53,55,0.25); }
+    .cal-day-cell.other-month { opacity: 0.18; cursor: default; pointer-events: none; }
+
+    .cal-day-num {
+      width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+      border-radius: 6px; font-size: 12px; font-weight: 500;
+      color: #e2e2e5; margin-bottom: 4px; flex-shrink: 0;
+    }
+    /* Today: filled primary square */
+    .cal-day-cell.today .cal-day-num {
+      background: #b8c8db; color: #223241; font-weight: 800;
+      border-radius: 6px; box-shadow: 0 0 12px rgba(184,200,219,0.3);
+    }
+    .cal-day-cell.selected .cal-day-num { background: #2e3e4d; color: #b8c8db; }
+
+    .cal-event-dots {
+      display: flex; gap: 3px; flex-wrap: wrap;
+      justify-content: center; max-width: 100%;
+    }
+    .cal-event-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: #b8c8db; opacity: 0.7; flex-shrink: 0;
+    }
+    .cal-event-dot.allday  { background: #a1d494; }
+    .cal-event-dot.holiday { background: #ffb4ab; }
+    .cal-event-more {
+      font-size: 8px; font-weight: 700; color: #9ca9b5; line-height: 1;
+    }
+
+    /* Right: Upcoming sidebar — Stitch col-span-4 pattern */
+    .cal-month-sidebar {
+      width: 220px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 0;
+      overflow: hidden;
+    }
+    .cal-sidebar-heading {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .cal-sidebar-title {
+      font-size: 14px; font-weight: 700; color: #b8c8db; letter-spacing: -0.01em;
+    }
+    .cal-sidebar-count {
+      font-size: 9px; font-weight: 800; color: #9ca9b5;
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .cal-sidebar-events {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 7px;
+      scrollbar-width: none;
+    }
+    .cal-sidebar-events::-webkit-scrollbar { display: none; }
+
+    /* Sidebar event card — Stitch ghost-border glass card */
+    .cal-sidebar-event {
+      display: flex; align-items: stretch;
+      background: rgba(51,53,55,0.35);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border-radius: 10px; overflow: hidden;
+      outline: 1px solid rgba(142,145,151,0.12);
+      border-left: 3px solid #b8c8db;
+      box-shadow: 0 2px 8px rgba(12,14,16,0.2);
+      flex-shrink: 0;
+    }
+    .cal-sidebar-event.allday  { border-left-color: #a1d494; }
+    .cal-sidebar-event.holiday { border-left-color: #ffb4ab; }
+    .cal-sidebar-event-inner { padding: 9px 11px; flex: 1; min-width: 0; }
+    .cal-sidebar-event-date {
+      font-size: 10px; font-weight: 700; color: #9ca9b5;
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 2px;
+    }
+    .cal-sidebar-event-title {
+      font-size: 13px; font-weight: 700; color: #e2e2e5;
+      letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cal-sidebar-event-time {
+      font-size: 11px; color: #c4c6cd; font-weight: 500; margin-top: 2px;
+    }
+
+    /* Month view: large heading in sub-header */
+    .cal-month-header .cal-period-title {
+      font-size: 22px; font-weight: 300; letter-spacing: -0.03em; color: #e2e2e5;
+      text-align: left;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+     * END injectCalendarGridStyles() block
+     * ══════════════════════════════════════════════════════════════════════════ */
+
+    /* ══════════════════════════════════════════════════════════════════════════
+     * SIMULATOR CAROUSEL — all 5 cards
+     * ══════════════════════════════════════════════════════════════════════════ */
+
+    .sim-carousel {
+      position: absolute; inset: 0; z-index: 1;
+      display: flex;
+      width: 400%; height: 100%;
+      transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .sim-card {
+      width: 25%; height: 100%; flex-shrink: 0; overflow: hidden; position: relative;
+    }
+
+    /* Nav dots */
+    .sim-nav {
+      position: absolute; bottom: 11px; left: 50%; transform: translateX(-50%);
+      z-index: 30; display: flex; align-items: center; gap: 10px;
+      pointer-events: auto;
+    }
+    .sim-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: rgba(196,198,205,0.28);
+      cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+    }
+    .sim-dot.active { background: #b8c8db; width: 18px; border-radius: 3px; }
+    .sim-nav-arrow {
+      background: none; border: none; color: rgba(196,198,205,0.35);
+      font-size: 22px; line-height: 1; cursor: pointer; padding: 0 2px;
+      transition: color 0.15s; -webkit-tap-highlight-color: transparent;
+    }
+    .sim-nav-arrow:hover { color: #b8c8db; }
+
+    /* ── Card 0: Ambient ─────────────────────────────────────────────────── */
+    .sim-ambient {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      justify-content: flex-end; padding: 28px 32px 40px 32px;
+    }
+    .sim-ambient-events {
+      position: absolute; top: 20px; right: 20px;
+      width: 240px;
+      background: rgba(18,20,22,0.70); backdrop-filter: blur(20px);
+      border: 1px solid rgba(184,200,219,0.18); border-radius: 14px;
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 0;
+    }
+    .sim-ambient-events-title {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.16em;
+      text-transform: uppercase; color: rgba(184,200,219,0.5);
+      margin-bottom: 10px;
+    }
+    .sim-ambient-event {
+      display: flex; align-items: baseline; gap: 8px;
+      padding: 5px 0; border-bottom: 1px solid rgba(67,71,76,0.3);
+    }
+    .sim-ambient-event:last-child { border-bottom: none; }
+    .sim-ambient-evt-time {
+      font-size: 9px; font-weight: 700; color: #b8c8db;
+      letter-spacing: 0.06em; white-space: nowrap; flex-shrink: 0;
+    }
+    .sim-ambient-evt-title {
+      font-size: 11px; font-weight: 500; color: #e2e2e5;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sim-clock-large {
+      font-size: 80px; font-weight: 200; letter-spacing: -0.04em;
+      color: #e2e2e5; line-height: 1; text-shadow: 0 2px 24px rgba(0,0,0,0.5);
+    }
+    .sim-date-large {
+      font-size: 16px; font-weight: 400; color: rgba(226,226,229,0.75);
+      letter-spacing: 0.01em; margin-top: 4px; margin-bottom: 12px;
+    }
+    .sim-wx-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(18,20,22,0.55); backdrop-filter: blur(12px);
+      border: 1px solid rgba(184,200,219,0.18); border-radius: 20px;
+      padding: 6px 14px; align-self: flex-start;
+    }
+    .sim-wx-temp { font-size: 15px; font-weight: 700; color: #e2e2e5; }
+    .sim-wx-cond { font-size: 12px; color: rgba(196,198,205,0.7); font-weight: 500; }
+    .sim-wx-icon { font-size: 16px; }
+
+    /* ── Cards 1-3: Boreal dark surface cards ────────────────────────────── */
+    .sim-boreal-surface {
+      position: absolute; inset: 0;
+      background: rgba(12,14,16,0.88); backdrop-filter: blur(4px);
+      display: flex; flex-direction: column;
+    }
+    .sim-boreal-header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 24px;
+      background: rgba(12,14,16,0.7); backdrop-filter: blur(24px);
+      border-bottom: 1px solid rgba(67,71,76,0.35); flex-shrink: 0;
+    }
+    .sim-boreal-header i { color: #b8c8db; font-size: 16px; opacity: 0.75; }
+    .sim-boreal-header-title {
+      font-size: 15px; font-weight: 800; color: #e2e2e5;
+      letter-spacing: -0.02em; flex: 1;
+    }
+    .sim-boreal-header-time {
+      font-size: 11px; font-weight: 700; color: #c4c6cd;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .sim-boreal-back {
+      background: none; border: none; color: rgba(196,198,205,0.45);
+      font-size: 15px; cursor: pointer; padding: 8px; border-radius: 6px;
+    }
+
+    /* ── Card 1: Summary ─────────────────────────────────────────────────── */
+    .sim-summary-body {
+      flex: 1; overflow-y: auto; padding: 20px 28px;
+      display: flex; flex-direction: column; gap: 0;
+      scrollbar-width: none;
+    }
+    .sim-summary-body::-webkit-scrollbar { display: none; }
+    .sim-summary-greeting {
+      font-size: 22px; font-weight: 300; color: #e2e2e5;
+      letter-spacing: -0.02em; margin-bottom: 4px;
+    }
+    .sim-summary-greeting strong { font-weight: 800; color: #b8c8db; }
+    .sim-summary-sub {
+      font-size: 12px; color: rgba(196,198,205,0.6);
+      font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+    .sim-summary-section {
+      margin-bottom: 16px;
+    }
+    .sim-summary-section-label {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.16em;
+      text-transform: uppercase; color: rgba(184,200,219,0.5);
+      margin-bottom: 8px;
+    }
+    .sim-summary-text {
+      font-size: 13px; font-weight: 400; color: rgba(226,226,229,0.85);
+      line-height: 1.65;
+    }
+    .sim-summary-event-row {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 6px 0; border-bottom: 1px solid rgba(67,71,76,0.25);
+    }
+    .sim-summary-event-row:last-child { border-bottom: none; }
+    .sim-summary-evt-time {
+      font-size: 10px; font-weight: 700; color: #b8c8db;
+      white-space: nowrap; flex-shrink: 0; letter-spacing: 0.04em;
+    }
+    .sim-summary-evt-title {
+      font-size: 13px; font-weight: 500; color: #e2e2e5;
+    }
+    .sim-summary-evt-loc {
+      font-size: 11px; color: rgba(196,198,205,0.55); margin-left: auto;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sim-summary-affirmation {
+      margin-top: 8px; padding: 12px 16px;
+      background: rgba(184,200,219,0.07); border-left: 2px solid rgba(184,200,219,0.3);
+      border-radius: 0 8px 8px 0;
+      font-size: 13px; font-style: italic; font-weight: 400;
+      color: rgba(226,226,229,0.7); line-height: 1.5;
+    }
+
+    /* ── Card 2: Home Assistant ──────────────────────────────────────────── */
+    .sim-ha-grid {
+      flex: 1; display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 10px; padding: 16px 20px 30px 20px;
+    }
+    .sim-ha-tile {
+      background: rgba(26,28,30,0.75); backdrop-filter: blur(12px);
+      border: 1px solid rgba(67,71,76,0.35); border-radius: 14px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      padding: 14px 16px; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .sim-ha-tile:active { background: rgba(46,48,50,0.85); }
+    .sim-ha-tile.on { border-color: rgba(184,200,219,0.25); background: rgba(46,62,77,0.55); }
+    .sim-ha-tile-icon { font-size: 22px; margin-bottom: 6px; }
+    .sim-ha-tile.on .sim-ha-tile-icon { color: #b8c8db; }
+    .sim-ha-tile:not(.on) .sim-ha-tile-icon { color: rgba(196,198,205,0.3); }
+    .sim-ha-tile-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: rgba(196,198,205,0.5);
+    }
+    .sim-ha-tile-value {
+      font-size: 14px; font-weight: 700; color: #e2e2e5; margin-top: 2px;
+    }
+    .sim-ha-tile.on .sim-ha-tile-label { color: rgba(184,200,219,0.6); }
+    .sim-ha-tile.on .sim-ha-tile-value { color: #b8c8db; }
+
+    /* ── Card 3: Forecast ────────────────────────────────────────────────── */
+    .sim-forecast-strip {
+      flex: 1; display: flex; gap: 10px;
+      padding: 14px 20px 30px 20px; align-items: stretch;
+    }
+    .sim-forecast-day {
+      flex: 1; background: rgba(26,28,30,0.7); backdrop-filter: blur(12px);
+      border: 1px solid rgba(67,71,76,0.35); border-radius: 14px;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 16px 8px 14px 8px; gap: 0;
+    }
+    .sim-forecast-day.today { background: rgba(46,62,77,0.55); border-color: rgba(184,200,219,0.2); }
+    .sim-fc-dow {
+      font-size: 9px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.14em; color: rgba(196,198,205,0.5); margin-bottom: 3px;
+    }
+    .sim-forecast-day.today .sim-fc-dow { color: #b8c8db; }
+    .sim-fc-date { font-size: 11px; font-weight: 600; color: rgba(196,198,205,0.4); margin-bottom: 12px; }
+    .sim-fc-icon { font-size: 28px; margin-bottom: 10px; }
+    .sim-fc-cond {
+      font-size: 9px; font-weight: 600; color: rgba(196,198,205,0.55);
+      text-align: center; letter-spacing: 0.04em; margin-bottom: 12px; flex: 1;
+      display: flex; align-items: center; line-height: 1.3;
+    }
+    .sim-fc-high { font-size: 22px; font-weight: 700; color: #e2e2e5; line-height: 1; }
+    .sim-fc-low  { font-size: 13px; font-weight: 400; color: rgba(196,198,205,0.45); margin-top: 3px; }
+    .sim-fc-detail {
+      margin-top: 10px; display: flex; flex-direction: column; gap: 3px; width: 100%; align-items: center;
+    }
+    .sim-fc-detail-row {
+      font-size: 9px; color: rgba(196,198,205,0.45); font-weight: 600;
+      letter-spacing: 0.04em; text-align: center;
+    }
+    .sim-fc-detail-row span { color: rgba(196,198,205,0.65); }
+
+    /* ── Card 0: stacked shortcut buttons (bottom-right) ────────────────── */
+    .sim-ambient-shortcuts {
+      position: absolute; bottom: 24px; right: 20px;
+      display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    }
+    .sim-ambient-shortcuts .cal-ambient-shortcut-btn {
+      position: relative; bottom: auto; right: auto;
+    }
+
+    /* ── Card 3 (new): DAK-inspired Boreal Lens weather ─────────────────── */
+    .sim-wx-canvas {
+      position: absolute; inset: 0;
+      background: rgba(12,14,16,0.82);
+      display: flex; flex-direction: column;
+    }
+    /* Hero row: big temp left, 4 stat cards right */
+    .sim-wx-hero {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding: 12px 24px 10px 24px; flex-shrink: 0;
+    }
+    .sim-wx-hero-temp {
+      font-size: 76px; font-weight: 200; letter-spacing: -0.04em;
+      color: #b8c8db; line-height: 1;
+    }
+    .sim-wx-hero-cond {
+      font-size: 17px; font-weight: 600; color: #e2e2e5; margin-top: -2px;
+    }
+    .sim-wx-hero-feels {
+      font-size: 11px; color: rgba(196,198,205,0.55); font-weight: 500;
+      letter-spacing: 0.05em; margin-top: 3px;
+    }
+    /* 2×2 stat grid */
+    .sim-wx-stat-grid {
+      display: grid; grid-template-columns: repeat(2, 128px); gap: 7px;
+    }
+    .sim-wx-stat {
+      background: rgba(51,53,55,0.4); backdrop-filter: blur(20px);
+      outline: 1px solid rgba(142,145,151,0.15); border-radius: 10px;
+      padding: 10px 14px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .sim-wx-stat-lbl {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.15em; color: rgba(196,198,205,0.55);
+    }
+    .sim-wx-stat-lbl i { font-size: 10px; }
+    .sim-wx-stat-val {
+      font-size: 17px; font-weight: 700; color: #e2e2e5;
+    }
+    .sim-wx-stat-val sub { font-size: 10px; font-weight: 400; vertical-align: baseline; }
+    /* Section headers */
+    .sim-wx-hdr {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.2em; margin-bottom: 7px; padding: 0 24px; flex-shrink: 0;
+    }
+    .sim-wx-hdr.primary  { color: #b8c8db; }
+    .sim-wx-hdr.secondary { color: #a1d494; }
+    /* Hourly strip */
+    .sim-hourly-strip {
+      display: flex; gap: 5px; padding: 0 24px; flex-shrink: 0; margin-bottom: 12px;
+    }
+    .sim-h-item {
+      flex: 1; background: rgba(51,53,55,0.4); backdrop-filter: blur(20px);
+      outline: 1px solid rgba(142,145,151,0.15); border-radius: 10px;
+      padding: 9px 4px; display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+    }
+    .sim-h-item.now {
+      background: rgba(46,62,77,0.55); outline-color: rgba(184,200,219,0.25);
+      border-bottom: 2px solid #b8c8db;
+    }
+    .sim-h-time {
+      font-size: 8px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: rgba(196,198,205,0.5);
+    }
+    .sim-h-item.now .sim-h-time { color: #b8c8db; }
+    .sim-h-icon { font-size: 15px; line-height: 1; }
+    .sim-h-temp { font-size: 13px; font-weight: 700; color: #e2e2e5; }
+    .sim-h-item.now .sim-h-temp { color: #fff; }
+    /* Daily strip */
+    .sim-daily-strip {
+      display: flex; gap: 5px; padding: 0 24px 18px 24px; flex-shrink: 0;
+    }
+    .sim-d-item {
+      flex: 1; background: rgba(51,53,55,0.4); backdrop-filter: blur(20px);
+      outline: 1px solid rgba(142,145,151,0.15); border-radius: 10px;
+      padding: 9px 4px; display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+    }
+    .sim-d-dow {
+      font-size: 8px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: #a1d494;
+    }
+    .sim-d-icon { font-size: 15px; line-height: 1; }
+    .sim-d-high { font-size: 13px; font-weight: 700; color: #e2e2e5; line-height: 1; }
+    .sim-d-low  { font-size: 9px; color: rgba(196,198,205,0.4); }
+  </style>
+</head>
+<body>
+  <div class="sim-label">Smart Display · Boreal Aesthetic Simulator · 1024 × 600</div>
+
+  <div class="sim-frame">
+    <!-- Shared photo background (visible behind all cards) -->
+    <div class="sim-photo-bg">
+      <img class="sim-photo" id="photoBg0" src="" alt="">
+      <img class="sim-photo hidden" id="photoBg1" src="" alt="">
+      <div class="sim-photo-overlay"></div>
+    </div>
+
+    <!-- Carousel — 4 active cards: Home · Weather · Calendar · Summary -->
+    <div class="sim-carousel" id="simCarousel">
+
+      <!-- ── Card 0: Home/Ambient ───────────────────────────────────────────── -->
+      <div class="sim-card" id="simCard0">
+        <div class="sim-ambient">
+          <!-- Upper-right: upcoming events mini card -->
+          <div class="sim-ambient-events">
+            <div class="sim-ambient-events-title">Today</div>
+            <div class="sim-ambient-event">
+              <span class="sim-ambient-evt-time">9:00 AM</span>
+              <span class="sim-ambient-evt-title">Luke – Morning Standup</span>
+            </div>
+            <div class="sim-ambient-event">
+              <span class="sim-ambient-evt-time">10:30 AM</span>
+              <span class="sim-ambient-evt-title">Meghan – Doctor Appt</span>
+            </div>
+            <div class="sim-ambient-event">
+              <span class="sim-ambient-evt-time">12:00 PM</span>
+              <span class="sim-ambient-evt-title">Lunch – Luke & Meghan</span>
+            </div>
+            <div class="sim-ambient-event">
+              <span class="sim-ambient-evt-time">2:00 PM</span>
+              <span class="sim-ambient-evt-title">Emma & Sophia Playdate</span>
+            </div>
+            <div class="sim-ambient-event">
+              <span class="sim-ambient-evt-time">6:00 PM</span>
+              <span class="sim-ambient-evt-title">Family Dinner</span>
+            </div>
+          </div>
+          <!-- Bottom-left: clock + date + weather -->
+          <div class="sim-clock-large" id="simAmbientClock">12:00 PM</div>
+          <div class="sim-date-large">Wednesday, April 16</div>
+          <div class="sim-wx-pill">
+            <span class="sim-wx-icon">⛅</span>
+            <span class="sim-wx-temp">58°F</span>
+            <span class="sim-wx-cond">Partly Cloudy</span>
+          </div>
+          <!-- Bottom-right: 3 stacked shortcuts -->
+          <div class="sim-ambient-shortcuts">
+            <button class="cal-ambient-shortcut-btn" onclick="goToCard(2)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>Calendar
+            </button>
+            <button class="cal-ambient-shortcut-btn" onclick="goToCard(1)">
+              <i class="fas fa-cloud-sun" style="font-size:13px"></i>Weather
+            </button>
+            <button class="cal-ambient-shortcut-btn" onclick="goToCard(3)">
+              <i class="fas fa-robot" style="font-size:13px"></i>Summary
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Card 1: Weather (Boreal Lens / DAK-inspired) ────────────────── -->
+      <div class="sim-card" id="simCard1">
+        <div class="sim-wx-canvas">
+          <div class="sim-boreal-header">
+            <i class="fas fa-cloud-sun"></i>
+            <span class="sim-boreal-header-title">Weather</span>
+            <span class="sim-boreal-header-time" id="simClockWeather"></span>
+            <button class="sim-boreal-back" onclick="goToCard(0)" title="Home"><i class="fas fa-home"></i></button>
+          </div>
+          <div class="sim-wx-hero">
+            <div>
+              <div class="sim-wx-hero-temp">58°</div>
+              <div class="sim-wx-hero-cond">Partly Cloudy</div>
+              <div class="sim-wx-hero-feels">Feels like 52° · Minneapolis, MN</div>
+            </div>
+            <div class="sim-wx-stat-grid">
+              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-wind"></i> Wind</div><div class="sim-wx-stat-val">8 <sub>mph SW</sub></div></div>
+              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-tint"></i> Humidity</div><div class="sim-wx-stat-val">54<sub>%</sub></div></div>
+              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-sun"></i> UV Index</div><div class="sim-wx-stat-val">3 <sub>Mod</sub></div></div>
+              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-cloud-rain"></i> Precip</div><div class="sim-wx-stat-val">10<sub>%</sub></div></div>
+            </div>
+          </div>
+          <div class="sim-wx-hdr primary">Hourly Forecast</div>
+          <div class="sim-hourly-strip">
+            <div class="sim-h-item now"><div class="sim-h-time">Now</div><div class="sim-h-icon">⛅</div><div class="sim-h-temp">58°</div></div>
+            <div class="sim-h-item"><div class="sim-h-time">2 PM</div><div class="sim-h-icon">⛅</div><div class="sim-h-temp">59°</div></div>
+            <div class="sim-h-item"><div class="sim-h-time">3 PM</div><div class="sim-h-icon">🌤️</div><div class="sim-h-temp">58°</div></div>
+            <div class="sim-h-item"><div class="sim-h-time">4 PM</div><div class="sim-h-icon">🌤️</div><div class="sim-h-temp">56°</div></div>
+            <div class="sim-h-item"><div class="sim-h-time">5 PM</div><div class="sim-h-icon">☁️</div><div class="sim-h-temp">54°</div></div>
+            <div class="sim-h-item"><div class="sim-h-time">6 PM</div><div class="sim-h-icon">☁️</div><div class="sim-h-temp">51°</div></div>
+            <div class="sim-h-item"><div class="sim-h-time">8 PM</div><div class="sim-h-icon">🌙</div><div class="sim-h-temp">47°</div></div>
+            <div class="sim-h-item"><div class="sim-h-time">10 PM</div><div class="sim-h-icon">🌙</div><div class="sim-h-temp">43°</div></div>
+          </div>
+          <div class="sim-wx-hdr secondary">Daily Forecast</div>
+          <div class="sim-daily-strip">
+            <div class="sim-d-item"><div class="sim-d-dow">Wed</div><div class="sim-d-icon">⛅</div><div class="sim-d-high">58°</div><div class="sim-d-low">39°</div></div>
+            <div class="sim-d-item"><div class="sim-d-dow">Thu</div><div class="sim-d-icon">🌤️</div><div class="sim-d-high">62°</div><div class="sim-d-low">41°</div></div>
+            <div class="sim-d-item"><div class="sim-d-dow">Fri</div><div class="sim-d-icon">🌧️</div><div class="sim-d-high">52°</div><div class="sim-d-low">40°</div></div>
+            <div class="sim-d-item"><div class="sim-d-dow">Sat</div><div class="sim-d-icon">⛅</div><div class="sim-d-high">55°</div><div class="sim-d-low">37°</div></div>
+            <div class="sim-d-item"><div class="sim-d-dow">Sun</div><div class="sim-d-icon">☀️</div><div class="sim-d-high">61°</div><div class="sim-d-low">42°</div></div>
+            <div class="sim-d-item"><div class="sim-d-dow">Mon</div><div class="sim-d-icon">🌤️</div><div class="sim-d-high">59°</div><div class="sim-d-low">44°</div></div>
+            <div class="sim-d-item"><div class="sim-d-dow">Tue</div><div class="sim-d-icon">☁️</div><div class="sim-d-high">54°</div><div class="sim-d-low">41°</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Card 2: Calendar ────────────────────────────────────────────── -->
+      <div class="sim-card" id="simCard2">
+        <div id="agendaCard" class="agenda-container">
+      <div class="agenda-header">
+        <i class="fas fa-calendar-day"></i>
+        <span style="display:none">Calendar</span>
+        <div class="header-time-display" id="simClock"></div>
+        <button class="ha-back-btn" id="agendaBackBtn" onclick="goToCard(0)" title="Home">
+          <i class="fas fa-home"></i>
+        </button>
+        <div id="calViewToggle" class="cal-view-toggle" style="margin-left:auto">
+          <button class="cal-toggle-btn active" data-view="day">Day</button>
+          <button class="cal-toggle-btn" data-view="week">Week</button>
+          <button class="cal-toggle-btn" data-view="month">Month</button>
+        </div>
+        <button class="settings-btn" id="agendaSettingsBtn" style="display:none">
+          <i class="fas fa-cog"></i>
+        </button>
+      </div>
+      <div id="calendarMonthView" class="cal-month-view" style="display:none">
+        <div class="cal-month-header">
+          <button class="cal-nav-btn" id="calPrevMonth">&#8249;</button>
+          <span class="cal-period-title" id="calMonthTitle"></span>
+          <button class="cal-nav-btn" id="calNextMonth">&#8250;</button>
+        </div>
+        <div class="cal-month-body">
+          <div class="cal-month-main">
+            <div class="cal-dow-row">
+              <div>Sun</div><div>Mon</div><div>Tue</div>
+              <div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+            <div class="cal-grid" id="calGrid"></div>
+          </div>
+          <div class="cal-month-sidebar">
+            <div class="cal-sidebar-heading">
+              <span class="cal-sidebar-title">Upcoming</span>
+              <span class="cal-sidebar-count" id="calSidebarCount"></span>
+            </div>
+            <div class="cal-sidebar-events" id="calMonthSidebar"></div>
+          </div>
+        </div>
+        <div class="cal-return-bar">
+          <div class="cal-return-progress" id="calReturnProgress" style="width:100%"></div>
+        </div>
+      </div>
+      <div id="calendarWeekView" class="cal-week-view" style="display:none">
+        <div class="cal-week-header">
+          <button class="cal-nav-btn" id="calPrevWeek">&#8249;</button>
+          <span class="cal-period-title" id="calWeekTitle"></span>
+          <button class="cal-nav-btn" id="calNextWeek">&#8250;</button>
+        </div>
+        <div class="cal-grid-week" id="calWeekGrid"></div>
+        <div class="cal-return-bar">
+          <div class="cal-return-progress" id="calWeekReturnProgress" style="width:100%"></div>
+        </div>
+      </div>
+      <div id="calendarDayView" class="cal-day-view" style="display:flex">
+        <div class="cal-day-header">
+          <button class="cal-nav-btn cal-nav-arrow" id="calPrevDay">&#8592;</button>
+          <span class="cal-period-title" id="calDayTitle"></span>
+          <button class="cal-nav-btn cal-nav-arrow" id="calNextDay">&#8594;</button>
+        </div>
+        <div class="cal-day-events" id="calDayEvents"></div>
+        <div class="cal-return-bar">
+          <div class="cal-return-progress" id="calDayReturnProgress" style="width:100%"></div>
+        </div>
+      </div>
+      <div id="agendaContent" class="agenda-content" style="display:none"></div>
+        </div><!-- /agendaCard -->
+      </div><!-- /simCard2 -->
+
+      <!-- ── Card 3: Daily Summary ───────────────────────────────────────── -->
+      <div class="sim-card" id="simCard3">
+        <div class="sim-boreal-surface">
+          <div class="sim-boreal-header">
+            <i class="fas fa-robot"></i>
+            <span class="sim-boreal-header-title">Daily Summary</span>
+            <span class="sim-boreal-header-time" id="simClockSummary"></span>
+            <button class="sim-boreal-back" onclick="goToCard(0)" title="Home"><i class="fas fa-home"></i></button>
+          </div>
+          <div class="sim-summary-body">
+            <div class="sim-summary-greeting">Good morning, <strong>Luke</strong>.</div>
+            <div class="sim-summary-sub">Wednesday · April 16, 2026</div>
+
+            <div class="sim-summary-section">
+              <div class="sim-summary-section-label">Today's Schedule</div>
+              <div class="sim-summary-event-row">
+                <span class="sim-summary-evt-time">9:00 AM</span>
+                <span class="sim-summary-evt-title">Morning Standup</span>
+              </div>
+              <div class="sim-summary-event-row">
+                <span class="sim-summary-evt-time">10:30 AM</span>
+                <span class="sim-summary-evt-title">Meghan – Doctor Appointment</span>
+                <span class="sim-summary-evt-loc">Midtown Medical</span>
+              </div>
+              <div class="sim-summary-event-row">
+                <span class="sim-summary-evt-time">12:00 PM</span>
+                <span class="sim-summary-evt-title">Lunch – Luke & Meghan</span>
+                <span class="sim-summary-evt-loc">Downtown Bistro</span>
+              </div>
+              <div class="sim-summary-event-row">
+                <span class="sim-summary-evt-time">2:00 PM</span>
+                <span class="sim-summary-evt-title">Emma & Sophia Playdate</span>
+                <span class="sim-summary-evt-loc">Zoe's house</span>
+              </div>
+              <div class="sim-summary-event-row">
+                <span class="sim-summary-evt-time">6:00 PM</span>
+                <span class="sim-summary-evt-title">Family Dinner</span>
+              </div>
+              <div class="sim-summary-event-row">
+                <span class="sim-summary-evt-time">8:00 PM</span>
+                <span class="sim-summary-evt-title">Luke – Fantasy League Draft</span>
+              </div>
+            </div>
+
+            <div class="sim-summary-section">
+              <div class="sim-summary-section-label">Weather</div>
+              <div class="sim-summary-text">Partly cloudy today, high of <strong style="color:#b8c8db">58°F</strong>. Good conditions for the girls' afternoon playdate. Tonight clears up — low of 38°F.</div>
+            </div>
+
+            <div class="sim-summary-section">
+              <div class="sim-summary-section-label">Coming Up</div>
+              <div class="sim-summary-text">Spring Break continues through April 25th. Good Friday this Friday — consider something fun with the kids. Easter Sunday the 20th.</div>
+            </div>
+
+            <div class="sim-summary-affirmation">
+              "Not all those who wander are lost."
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /simCarousel -->
+
+    <!-- Home Assistant — reserved, not in active carousel -->
+    <div id="simCardHA" style="display:none">
+      <div class="sim-boreal-surface">
+        <div class="sim-boreal-header">
+          <i class="fas fa-home"></i>
+          <span class="sim-boreal-header-title">Home Assistant</span>
+          <button class="sim-boreal-back" onclick="goToCard(0)"><i class="fas fa-home"></i></button>
+        </div>
+        <div class="sim-ha-grid"><!-- HA tiles preserved -->
+          <div class="sim-ha-grid">
+            <div class="sim-ha-tile on">
+              <div class="sim-ha-tile-icon"><i class="fas fa-lightbulb"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Living Room</div>
+                <div class="sim-ha-tile-value">65% · On</div>
+              </div>
+            </div>
+            <div class="sim-ha-tile on">
+              <div class="sim-ha-tile-icon"><i class="fas fa-thermometer-half"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Thermostat</div>
+                <div class="sim-ha-tile-value">68°F · Heat</div>
+              </div>
+            </div>
+            <div class="sim-ha-tile">
+              <div class="sim-ha-tile-icon"><i class="fas fa-lightbulb"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Kitchen</div>
+                <div class="sim-ha-tile-value">Off</div>
+              </div>
+            </div>
+            <div class="sim-ha-tile">
+              <div class="sim-ha-tile-icon"><i class="fas fa-lightbulb"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Bedroom</div>
+                <div class="sim-ha-tile-value">Off</div>
+              </div>
+            </div>
+            <div class="sim-ha-tile on">
+              <div class="sim-ha-tile-icon"><i class="fas fa-lock"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Front Door</div>
+                <div class="sim-ha-tile-value">Locked</div>
+              </div>
+            </div>
+            <div class="sim-ha-tile on">
+              <div class="sim-ha-tile-icon"><i class="fas fa-warehouse"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Garage</div>
+                <div class="sim-ha-tile-value">Closed</div>
+              </div>
+            </div>
+            <div class="sim-ha-tile on">
+              <div class="sim-ha-tile-icon"><i class="fas fa-thermometer-quarter"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Exterior</div>
+                <div class="sim-ha-tile-value">44°F</div>
+              </div>
+            </div>
+            <div class="sim-ha-tile">
+              <div class="sim-ha-tile-icon"><i class="fas fa-sun"></i></div>
+              <div>
+                <div class="sim-ha-tile-label">Porch Light</div>
+                <div class="sim-ha-tile-value">Off</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /simCardHA -->
+
+    <!-- Navigation dots — 4 active cards -->
+    <div class="sim-nav" id="simNav">
+      <button class="sim-nav-arrow" id="simNavLeft">&#8249;</button>
+      <div class="sim-dot active" data-card="0"></div>
+      <div class="sim-dot" data-card="1"></div>
+      <div class="sim-dot" data-card="2"></div>
+      <div class="sim-dot" data-card="3"></div>
+      <button class="sim-nav-arrow" id="simNavRight">&#8250;</button>
+    </div>
+
+  </div><!-- /sim-frame -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       ORPHANED MARKUP BELOW — old duplicate cards, safe to delete later
+       (kept here only so the file doesn't break on partial reads)
+  ═══════════════════════════════════════════════════════════════════════════ -->
+  <div style="display:none">
+      <div class="sim-card" id="simCard3_old">
+        <div class="sim-wx-canvas">
+
+          <!-- Glass header with home button -->
+          <div class="sim-boreal-header">
+            <i class="fas fa-cloud-sun"></i>
+            <span class="sim-boreal-header-title">Weather</span>
+            <span class="sim-boreal-header-time" id="simClockForecast"></span>
+            <button class="sim-boreal-back" onclick="goToCard(0)" title="Home">
+              <i class="fas fa-home"></i>
+            </button>
+          </div>
+
+          <!-- Hero: big temp + condition (left) + 4 stat cards (right) -->
+          <div class="sim-wx-hero">
+            <div>
+              <div class="sim-wx-hero-temp">58°</div>
+              <div class="sim-wx-hero-cond">Partly Cloudy</div>
+              <div class="sim-wx-hero-feels">Feels like 52° · Minneapolis, MN</div>
+            </div>
+            <div class="sim-wx-stat-grid">
+              <div class="sim-wx-stat">
+                <div class="sim-wx-stat-lbl"><i class="fas fa-wind"></i> Wind</div>
+                <div class="sim-wx-stat-val">8 <sub>mph SW</sub></div>
+              </div>
+              <div class="sim-wx-stat">
+                <div class="sim-wx-stat-lbl"><i class="fas fa-tint"></i> Humidity</div>
+                <div class="sim-wx-stat-val">54<sub>%</sub></div>
+              </div>
+              <div class="sim-wx-stat">
+                <div class="sim-wx-stat-lbl"><i class="fas fa-sun"></i> UV Index</div>
+                <div class="sim-wx-stat-val">3 <sub>Mod</sub></div>
+              </div>
+              <div class="sim-wx-stat">
+                <div class="sim-wx-stat-lbl"><i class="fas fa-cloud-rain"></i> Precip</div>
+                <div class="sim-wx-stat-val">10<sub>%</sub></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hourly Forecast -->
+          <div class="sim-wx-hdr primary">Hourly Forecast</div>
+          <div class="sim-hourly-strip">
+            <div class="sim-h-item now">
+              <div class="sim-h-time">Now</div>
+              <div class="sim-h-icon">⛅</div>
+              <div class="sim-h-temp">58°</div>
+            </div>
+            <div class="sim-h-item">
+              <div class="sim-h-time">2 PM</div>
+              <div class="sim-h-icon">⛅</div>
+              <div class="sim-h-temp">59°</div>
+            </div>
+            <div class="sim-h-item">
+              <div class="sim-h-time">3 PM</div>
+              <div class="sim-h-icon">🌤️</div>
+              <div class="sim-h-temp">58°</div>
+            </div>
+            <div class="sim-h-item">
+              <div class="sim-h-time">4 PM</div>
+              <div class="sim-h-icon">🌤️</div>
+              <div class="sim-h-temp">56°</div>
+            </div>
+            <div class="sim-h-item">
+              <div class="sim-h-time">5 PM</div>
+              <div class="sim-h-icon">☁️</div>
+              <div class="sim-h-temp">54°</div>
+            </div>
+            <div class="sim-h-item">
+              <div class="sim-h-time">6 PM</div>
+              <div class="sim-h-icon">☁️</div>
+              <div class="sim-h-temp">51°</div>
+            </div>
+            <div class="sim-h-item">
+              <div class="sim-h-time">8 PM</div>
+              <div class="sim-h-icon">🌙</div>
+              <div class="sim-h-temp">47°</div>
+            </div>
+            <div class="sim-h-item">
+              <div class="sim-h-time">10 PM</div>
+              <div class="sim-h-icon">🌙</div>
+              <div class="sim-h-temp">43°</div>
+            </div>
+          </div>
+
+          <!-- Daily Forecast -->
+          <div class="sim-wx-hdr secondary">Daily Forecast</div>
+          <div class="sim-daily-strip">
+            <div class="sim-d-item">
+              <div class="sim-d-dow">Wed</div>
+              <div class="sim-d-icon">⛅</div>
+              <div class="sim-d-high">58°</div>
+              <div class="sim-d-low">39°</div>
+            </div>
+            <div class="sim-d-item">
+              <div class="sim-d-dow">Thu</div>
+              <div class="sim-d-icon">🌤️</div>
+              <div class="sim-d-high">62°</div>
+              <div class="sim-d-low">41°</div>
+            </div>
+            <div class="sim-d-item">
+              <div class="sim-d-dow">Fri</div>
+              <div class="sim-d-icon">🌧️</div>
+              <div class="sim-d-high">52°</div>
+              <div class="sim-d-low">40°</div>
+            </div>
+            <div class="sim-d-item">
+              <div class="sim-d-dow">Sat</div>
+              <div class="sim-d-icon">⛅</div>
+              <div class="sim-d-high">55°</div>
+              <div class="sim-d-low">37°</div>
+            </div>
+            <div class="sim-d-item">
+              <div class="sim-d-dow">Sun</div>
+              <div class="sim-d-icon">☀️</div>
+              <div class="sim-d-high">61°</div>
+              <div class="sim-d-low">42°</div>
+            </div>
+            <div class="sim-d-item">
+              <div class="sim-d-dow">Mon</div>
+              <div class="sim-d-icon">🌤️</div>
+              <div class="sim-d-high">59°</div>
+              <div class="sim-d-low">44°</div>
+            </div>
+            <div class="sim-d-item">
+              <div class="sim-d-dow">Tue</div>
+              <div class="sim-d-icon">☁️</div>
+              <div class="sim-d-high">54°</div>
+              <div class="sim-d-low">41°</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── Card 4: Calendar (agendaCard) ──────────────────────────────── -->
+      <div class="sim-card" id="simCard4">
+        <div id="agendaCard" class="agenda-container">
+
+      <!-- .agenda-header — identical to index.html; toggle inserted by setupCalendarGrid() -->
+      <div class="agenda-header">
+        <i class="fas fa-calendar-day"></i>
+        <span style="display:none">Calendar</span>
+        <div class="header-time-display" id="simClock"></div>
+        <button class="ha-back-btn" id="agendaBackBtn" style="display:none">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <!-- #calViewToggle inserted before .settings-btn with marginLeft:auto -->
+        <div id="calViewToggle" class="cal-view-toggle" style="margin-left:auto">
+          <button class="cal-toggle-btn active" data-view="day">Day</button>
+          <button class="cal-toggle-btn" data-view="week">Week</button>
+          <button class="cal-toggle-btn" data-view="month">Month</button>
+        </div>
+        <button class="settings-btn" id="agendaSettingsBtn">
+          <i class="fas fa-cog"></i>
+        </button>
+      </div>
+
+      <!-- ── MONTH VIEW ───────────────────────────────────────────────────── -->
+      <!-- NOTE: cal-month-body + cal-month-sidebar are new DOM — renderMonthGrid()
+           must be updated in app.js to produce this structure. -->
+      <div id="calendarMonthView" class="cal-month-view" style="display:none">
+        <div class="cal-month-header">
+          <button class="cal-nav-btn" id="calPrevMonth">&#8249;</button>
+          <span class="cal-period-title" id="calMonthTitle"></span>
+          <button class="cal-nav-btn" id="calNextMonth">&#8250;</button>
+        </div>
+        <div class="cal-month-body">
+          <div class="cal-month-main">
+            <div class="cal-dow-row">
+              <div>Sun</div><div>Mon</div><div>Tue</div>
+              <div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+            <div class="cal-grid" id="calGrid"></div>
+          </div>
+          <div class="cal-month-sidebar">
+            <div class="cal-sidebar-heading">
+              <span class="cal-sidebar-title">Upcoming</span>
+              <span class="cal-sidebar-count" id="calSidebarCount"></span>
+            </div>
+            <div class="cal-sidebar-events" id="calMonthSidebar"></div>
+          </div>
+        </div>
+        <div class="cal-return-bar">
+          <div class="cal-return-progress" id="calReturnProgress" style="width:100%"></div>
+        </div>
+      </div>
+
+      <!-- ── WEEK VIEW ────────────────────────────────────────────────────── -->
+      <div id="calendarWeekView" class="cal-week-view" style="display:none">
+        <div class="cal-week-header">
+          <button class="cal-nav-btn" id="calPrevWeek">&#8249;</button>
+          <span class="cal-period-title" id="calWeekTitle"></span>
+          <button class="cal-nav-btn" id="calNextWeek">&#8250;</button>
+        </div>
+        <div class="cal-grid-week" id="calWeekGrid"></div>
+        <div class="cal-return-bar">
+          <div class="cal-return-progress" id="calWeekReturnProgress" style="width:100%"></div>
+        </div>
+      </div>
+
+      <!-- ── DAY VIEW ─────────────────────────────────────────────────────── -->
+      <div id="calendarDayView" class="cal-day-view" style="display:flex">
+        <div class="cal-day-header">
+          <button class="cal-nav-btn cal-nav-arrow" id="calPrevDay">&#8592;</button>
+          <span class="cal-period-title" id="calDayTitle"></span>
+          <button class="cal-nav-btn cal-nav-arrow" id="calNextDay">&#8594;</button>
+        </div>
+        <div class="cal-day-events" id="calDayEvents"></div>
+        <div class="cal-return-bar">
+          <div class="cal-return-progress" id="calDayReturnProgress" style="width:100%"></div>
+        </div>
+      </div>
+
+  </div><!-- /orphaned old markup -->
+
+  <script>
+    // ════════════════════════════════════════════════════════════════════════
+    // PHOTO BACKGROUND — Boundary Waters photo rotation
+    // Folder: "background images/" (relative to simulator.html)
+    // Rotates every 30 seconds with a 1.8s crossfade.
+    // ════════════════════════════════════════════════════════════════════════
+    const PHOTO_FILES = [
+      "Boundary Waters '04 001.JPG","Boundary Waters '04 002.JPG","Boundary Waters '04 003.JPG",
+      "Boundary Waters '04 004.JPG","Boundary Waters '04 005.JPG","Boundary Waters '04 006.JPG",
+      "Boundary Waters '04 007.JPG","Boundary Waters '04 008.JPG","Boundary Waters '04 009.JPG",
+      "Boundary Waters '04 010.JPG","Boundary Waters '04 011.JPG","Boundary Waters '04 012.JPG",
+      "Boundary Waters '04 013.JPG","Boundary Waters '04 014.JPG","Boundary Waters '04 015.JPG",
+      "Boundary Waters '04 016.JPG","Boundary Waters '04 017.JPG","Boundary Waters '04 018.JPG",
+      "Boundary Waters '04 019.JPG","Boundary Waters '04 020.JPG","Boundary Waters '04 021.JPG",
+      "Boundary Waters '04 022.JPG","Boundary Waters '04 023.JPG","Boundary Waters '04 024.JPG",
+      "Boundary Waters '04 025.JPG","Boundary Waters '04 027.JPG","Boundary Waters '04 028.JPG",
+      "Boundary Waters '04 029.JPG","Boundary Waters '04 030.JPG","Boundary Waters '04 031.JPG",
+      "Boundary Waters '04 033.JPG","Boundary Waters '04 034.JPG","Boundary Waters '04 035.JPG",
+      "Boundary Waters '04 036.JPG","Boundary Waters '04 037.JPG","Boundary Waters '04 038.JPG",
+      "Boundary Waters '04 039.JPG","Boundary Waters '04 040.JPG","Boundary Waters '04 041.JPG",
+      "Boundary Waters '04 042.JPG","Boundary Waters '04 044.JPG","Boundary Waters '04 045.JPG",
+      "Boundary Waters '04 046.JPG","Boundary Waters '04 048.JPG","Boundary Waters '04 050.JPG",
+      "Boundary Waters '04 052.JPG","Boundary Waters '04 053.JPG","Boundary Waters '04 054.JPG",
+      "Boundary Waters '04 056.JPG","Boundary Waters '04 059.JPG","Boundary Waters '04 060.JPG",
+      "Boundary Waters '04 062.JPG","Boundary Waters '04 063.JPG","Boundary Waters '04 065.JPG",
+      "Boundary Waters '04 066.JPG","Boundary Waters '04 067.JPG","Boundary Waters '04 068.JPG",
+      "Boundary Waters '04 069.JPG","Boundary Waters '04 071.JPG","Boundary Waters '04 072.JPG",
+      "Boundary Waters '04 073.JPG","Boundary Waters '04 074.JPG","Boundary Waters '04 075.JPG",
+      "Boundary Waters '04 076.JPG","Boundary Waters '04 077.JPG","Boundary Waters '04 078.JPG",
+      "Boundary Waters '04 079.JPG","Boundary Waters '04 081.JPG","Boundary Waters '04 082.JPG",
+      "Boundary Waters '04 088.JPG","Boundary Waters '04 089.JPG","Boundary Waters '04 090.JPG",
+      "Boundary Waters '04 091.JPG","Boundary Waters '04 092.JPG","Boundary Waters '04 093.JPG",
+      "Boundary Waters '04 094.JPG","Boundary Waters '04 097.JPG","Boundary Waters '04 098.JPG",
+      "Boundary Waters '04 101.JPG","Boundary Waters '04 102.JPG","Boundary Waters '04 106.JPG",
+      "Boundary Waters '04 110.JPG","Boundary Waters '04 112.JPG","Boundary Waters '04 113.JPG",
+      "Boundary Waters '04 115.JPG","Boundary Waters '04 118.JPG","Boundary Waters '04 119.JPG",
+      "Boundary Waters '04 120.JPG","Boundary Waters '04 130.JPG","Boundary Waters '04 132.JPG",
+      "Boundary Waters '04 133.JPG","Boundary Waters '04 134.JPG","Boundary Waters '04 135.JPG",
+      "Boundary Waters '04 137.JPG","Boundary Waters '04 138.JPG","Boundary Waters '04 139.JPG",
+      "Boundary Waters '04 140.JPG",
+      "Boundery Waters 03 001.jpg","Boundery Waters 03 002.jpg","Boundery Waters 03 003.jpg",
+      "Boundery Waters 03 004.jpg","Boundery Waters 03 005.jpg","Boundery Waters 03 006.jpg",
+      "Boundery Waters 03 007.jpg","Boundery Waters 03 008.jpg","Boundery Waters 03 011.jpg",
+      "Boundery Waters 03 013.jpg",
+      "DSCF0153.JPG","DSCF0154.JPG","DSCF0155.JPG","DSCF0156.JPG","DSCF0157.JPG",
+      "DSCF0158.JPG","DSCF0159.JPG","DSCF0160.JPG","DSCF0162.JPG","DSCF0163.JPG",
+      "DSCF0164.JPG","DSCF0165.JPG","DSCF0166.JPG","DSCF0168.JPG","DSCF0169.JPG",
+      "DSCF0170.JPG","DSCF0171.JPG","DSCF0173.JPG","DSCF0174.JPG","DSCF0175.JPG",
+      "DSCF0176.JPG","DSCF0179.JPG","DSCF0182.JPG","DSCF0185.JPG","DSCF0187.JPG",
+      "SUNP0054.JPG","SUNP0055.JPG","SUNP0057.JPG","SUNP0059.JPG","SUNP0061.JPG",
+      "SUNP0062.JPG","SUNP0065.JPG","SUNP0066.JPG","SUNP0067.JPG","SUNP0068.JPG",
+      "SUNP0069.JPG","SUNP0075.JPG","SUNP0076.JPG","SUNP0077.JPG","SUNP0081.JPG",
+      "SUNP0084.JPG","SUNP0085.JPG","SUNP0088.JPG","SUNP0093.JPG","SUNP0094.JPG",
+      "SUNP0097.JPG","SUNP0099.JPG","SUNP0101.JPG","SUNP0102.JPG","SUNP0103.JPG",
+      "SUNP0104.JPG","SUNP0105.JPG","SUNP0106.JPG","SUNP0107.JPG","SUNP0108.JPG",
+      "SUNP0109.JPG","SUNP0110.JPG","SUNP0111.JPG","SUNP0112.JPG","SUNP0114.JPG",
+      "SUNP0115.JPG","SUNP0116.JPG","SUNP0117.JPG","SUNP0118.JPG","SUNP0119.JPG",
+      "SUNP0120.JPG","SUNP0124.JPG","SUNP0125.JPG","SUNP0133.JPG","SUNP0138.JPG",
+      "SUNP0142.JPG","SUNP0146.JPG","SUNP0147.JPG",
+      "img20250419_16495293.jpg"
+    ];
+
+    // Shuffle once on load so rotation order is random each session
+    (function shuffle(a) {
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+    })(PHOTO_FILES);
+
+    let _photoIndex  = 0;
+    let _activeSlot  = 0; // 0 = photoBg0 is visible, 1 = photoBg1 is visible
+    const PHOTO_DIR  = 'background images/resized/';
+    const ROTATE_MS  = 30000; // 30 seconds
+
+    function photoSrc(filename) {
+      return PHOTO_DIR + filename;
+    }
+
+    function initPhotos() {
+      const img0 = document.getElementById('photoBg0');
+      const img1 = document.getElementById('photoBg1');
+      // Load first photo immediately into slot 0
+      img0.src = photoSrc(PHOTO_FILES[0]);
+      img0.classList.remove('hidden');
+      img1.classList.add('hidden');
+      // Preload second photo into slot 1 ready for first swap
+      img1.src = photoSrc(PHOTO_FILES[1 % PHOTO_FILES.length]);
+      _photoIndex = 1;
+      setInterval(rotatePhoto, ROTATE_MS);
+    }
+
+    function rotatePhoto() {
+      const img0 = document.getElementById('photoBg0');
+      const img1 = document.getElementById('photoBg1');
+      const next = _activeSlot === 0 ? img1 : img0;
+      const prev = _activeSlot === 0 ? img0 : img1;
+
+      // Crossfade: show next, hide prev
+      next.classList.remove('hidden');
+      // Small delay so the transition fires after display change
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          prev.classList.add('hidden');
+        });
+      });
+
+      _activeSlot = _activeSlot === 0 ? 1 : 0;
+      _photoIndex = (_photoIndex + 1) % PHOTO_FILES.length;
+
+      // Preload the one after next into the now-fading slot (ready for next swap)
+      const preloadIdx = (_photoIndex + 1) % PHOTO_FILES.length;
+      setTimeout(() => { prev.src = photoSrc(PHOTO_FILES[preloadIdx]); }, 2000);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // MOCK DATA — Luke & Meghan (adults) + Emma, Liam, Sophia, Noah (kids)
+    // April 2026. Format matches Google Calendar API response.
+    // ════════════════════════════════════════════════════════════════════════
+    const MOCK_EVENTS = [
+      { summary: "Spring Break 🌻",            start:{date:"2026-04-13"}, end:{date:"2026-04-26"} },
+      { summary: "Emma's Birthday 🎂",         start:{date:"2026-04-14"}, end:{date:"2026-04-15"} },
+      { summary: "Tax Day 📋",                 start:{date:"2026-04-15"}, end:{date:"2026-04-16"} },
+      { summary: "Good Friday Holiday",        start:{date:"2026-04-18"}, end:{date:"2026-04-19"} },
+      { summary: "Easter Sunday Holiday",      start:{date:"2026-04-20"}, end:{date:"2026-04-21"} },
+      { summary: "Back to School 📚",          start:{date:"2026-04-28"}, end:{date:"2026-04-29"} },
+      { summary: "Luke – Out of Town",         start:{date:"2026-04-07"}, end:{date:"2026-04-10"} },
+
+      // Earlier April
+      { summary: "Sophia – Dance Recital",     start:{dateTime:"2026-04-05T14:00:00"}, end:{dateTime:"2026-04-05T16:00:00"}, location:"City Arts Center" },
+      { summary: "Noah – T-Ball Practice",     start:{dateTime:"2026-04-02T17:00:00"}, end:{dateTime:"2026-04-02T18:00:00"}, location:"Willow Park" },
+      { summary: "Liam – Orthodontist",        start:{dateTime:"2026-04-03T15:00:00"}, end:{dateTime:"2026-04-03T16:00:00"}, location:"Bright Smiles" },
+      { summary: "Meghan – Book Club",         start:{dateTime:"2026-04-08T19:00:00"}, end:{dateTime:"2026-04-08T21:00:00"}, location:"Eastside Library" },
+      { summary: "Liam – Soccer Game",         start:{dateTime:"2026-04-12T10:00:00"}, end:{dateTime:"2026-04-12T12:00:00"}, location:"Memorial Field" },
+      { summary: "Emma's Birthday Party 🎉",   start:{dateTime:"2026-04-12T14:00:00"}, end:{dateTime:"2026-04-12T17:00:00"}, location:"Bounce Universe" },
+
+      // April 16 — TODAY
+      { summary: "Luke – Morning Standup",     start:{dateTime:"2026-04-16T09:00:00"}, end:{dateTime:"2026-04-16T09:30:00"} },
+      { summary: "Meghan – Doctor Appointment",start:{dateTime:"2026-04-16T10:30:00"}, end:{dateTime:"2026-04-16T11:30:00"}, location:"Midtown Medical Center" },
+      { summary: "Lunch – Luke & Meghan",      start:{dateTime:"2026-04-16T12:00:00"}, end:{dateTime:"2026-04-16T13:00:00"}, location:"The Downtown Bistro" },
+      { summary: "Emma & Sophia Playdate",     start:{dateTime:"2026-04-16T14:00:00"}, end:{dateTime:"2026-04-16T16:30:00"}, location:"Zoe's house" },
+      { summary: "Family Dinner",              start:{dateTime:"2026-04-16T18:00:00"}, end:{dateTime:"2026-04-16T19:00:00"} },
+      { summary: "Luke – Fantasy League Draft",start:{dateTime:"2026-04-16T20:00:00"}, end:{dateTime:"2026-04-16T22:00:00"} },
+
+      // April 17
+      { summary: "Meghan – Pilates",           start:{dateTime:"2026-04-17T09:00:00"}, end:{dateTime:"2026-04-17T10:00:00"}, location:"FitLife Studio" },
+      { summary: "Luke – Budget Review",       start:{dateTime:"2026-04-17T10:00:00"}, end:{dateTime:"2026-04-17T11:30:00"} },
+      { summary: "Liam – Soccer Practice",     start:{dateTime:"2026-04-17T14:00:00"}, end:{dateTime:"2026-04-17T15:30:00"}, location:"Community Park" },
+      { summary: "Noah – T-Ball Practice",     start:{dateTime:"2026-04-17T16:00:00"}, end:{dateTime:"2026-04-17T17:00:00"}, location:"Willow Park" },
+
+      // April 18 — Good Friday
+      { summary: "Easter Egg Hunt Prep",       start:{dateTime:"2026-04-18T10:00:00"}, end:{dateTime:"2026-04-18T12:00:00"} },
+      { summary: "Lunch with Grandparents",    start:{dateTime:"2026-04-18T12:30:00"}, end:{dateTime:"2026-04-18T14:30:00"}, location:"Olive Garden" },
+      { summary: "Easter Basket Assembly",     start:{dateTime:"2026-04-18T15:00:00"}, end:{dateTime:"2026-04-18T16:30:00"} },
+
+      // April 19
+      { summary: "Emma – Soccer Game",         start:{dateTime:"2026-04-19T09:00:00"}, end:{dateTime:"2026-04-19T11:00:00"}, location:"Riverside Fields" },
+      { summary: "Grocery Run",                start:{dateTime:"2026-04-19T11:30:00"}, end:{dateTime:"2026-04-19T12:30:00"}, location:"Whole Foods" },
+      { summary: "Luke – Backyard BBQ Prep",   start:{dateTime:"2026-04-19T15:00:00"}, end:{dateTime:"2026-04-19T17:00:00"} },
+
+      // April 20 — Easter
+      { summary: "Easter Church Service 🙏",   start:{dateTime:"2026-04-20T09:00:00"}, end:{dateTime:"2026-04-20T10:30:00"}, location:"First Baptist Church" },
+      { summary: "Easter Egg Hunt 🐣",         start:{dateTime:"2026-04-20T11:00:00"}, end:{dateTime:"2026-04-20T12:00:00"} },
+      { summary: "Easter Brunch",              start:{dateTime:"2026-04-20T12:00:00"}, end:{dateTime:"2026-04-20T14:00:00"} },
+      { summary: "Easter Family Dinner",       start:{dateTime:"2026-04-20T16:00:00"}, end:{dateTime:"2026-04-20T19:00:00"} },
+
+      // April 21
+      { summary: "Museum of Natural History",  start:{dateTime:"2026-04-21T10:00:00"}, end:{dateTime:"2026-04-21T13:00:00"}, location:"City Museum District" },
+      { summary: "Pool Time 🏊",               start:{dateTime:"2026-04-21T14:30:00"}, end:{dateTime:"2026-04-21T16:30:00"}, location:"Greenview Aquatic Center" },
+
+      // April 22
+      { summary: "Luke – Dentist",             start:{dateTime:"2026-04-22T09:00:00"}, end:{dateTime:"2026-04-22T10:00:00"}, location:"Smile Dental" },
+      { summary: "Kids Movie Afternoon",       start:{dateTime:"2026-04-22T13:00:00"}, end:{dateTime:"2026-04-22T15:30:00"}, location:"Regal Cinema 14" },
+      { summary: "Meghan – Girls Night Out",   start:{dateTime:"2026-04-22T19:00:00"}, end:{dateTime:"2026-04-22T22:00:00"} },
+
+      // April 23
+      { summary: "Luke – Conference Call",     start:{dateTime:"2026-04-23T09:00:00"}, end:{dateTime:"2026-04-23T10:00:00"} },
+      { summary: "Meghan – Pilates",           start:{dateTime:"2026-04-23T11:00:00"}, end:{dateTime:"2026-04-23T12:00:00"}, location:"FitLife Studio" },
+      { summary: "Emma – Playdate with Zoe",   start:{dateTime:"2026-04-23T15:00:00"}, end:{dateTime:"2026-04-23T17:00:00"} },
+
+      // April 24
+      { summary: "Zoo Trip! 🦁",               start:{dateTime:"2026-04-24T10:00:00"}, end:{dateTime:"2026-04-24T14:00:00"}, location:"Riverside City Zoo" },
+      { summary: "Pizza Night 🍕",             start:{dateTime:"2026-04-24T18:00:00"}, end:{dateTime:"2026-04-24T19:30:00"}, location:"Pepe's Pizzeria" },
+
+      // April 25
+      { summary: "Sophia – Piano Lesson",      start:{dateTime:"2026-04-25T09:00:00"}, end:{dateTime:"2026-04-25T09:45:00"}, location:"City Music Academy" },
+      { summary: "Spring Break Wrap-up Lunch", start:{dateTime:"2026-04-25T12:00:00"}, end:{dateTime:"2026-04-25T13:30:00"}, location:"The Cheesecake Factory" },
+      { summary: "Liam – Soccer Practice",     start:{dateTime:"2026-04-25T14:00:00"}, end:{dateTime:"2026-04-25T15:30:00"}, location:"Community Park" },
+
+      // April 28
+      { summary: "School Drop-off",            start:{dateTime:"2026-04-28T08:00:00"}, end:{dateTime:"2026-04-28T08:30:00"} },
+      { summary: "Luke – Monthly Team Meeting",start:{dateTime:"2026-04-28T10:00:00"}, end:{dateTime:"2026-04-28T11:30:00"} },
+      { summary: "School Pick-up",             start:{dateTime:"2026-04-28T15:30:00"}, end:{dateTime:"2026-04-28T16:00:00"} },
+
+      // April 29-30
+      { summary: "Noah – Pediatrician",        start:{dateTime:"2026-04-29T14:00:00"}, end:{dateTime:"2026-04-29T15:00:00"}, location:"Kids Health Clinic" },
+      { summary: "School Pick-up",             start:{dateTime:"2026-04-29T15:30:00"}, end:{dateTime:"2026-04-29T16:00:00"} },
+      { summary: "Meghan – HOA Meeting",       start:{dateTime:"2026-04-30T19:00:00"}, end:{dateTime:"2026-04-30T20:30:00"} },
+      { summary: "School Pick-up",             start:{dateTime:"2026-04-30T15:30:00"}, end:{dateTime:"2026-04-30T16:00:00"} },
+    ];
+
+    // ════════════════════════════════════════════════════════════════════════
+    // STATE
+    // ════════════════════════════════════════════════════════════════════════
+    const SIM_TODAY = new Date(2026, 3, 16); // April 16 2026 — pin for stability
+
+    let calendarViewMode   = 'day';
+    let calendarMonthDate  = new Date(SIM_TODAY);
+    let calendarDayDate    = new Date(SIM_TODAY);
+    let calendarWeekStart  = weekStartFor(new Date(SIM_TODAY));
+    let calendarMonthEvents = MOCK_EVENTS;
+
+    function weekStartFor(date) {
+      const d = new Date(date);
+      d.setDate(d.getDate() - d.getDay()); d.setHours(0,0,0,0); return d;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // RENDERERS — new layouts; document changes needed in app.js below each
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * renderDayView() — NEW LAYOUT vs app.js
+     * Produces: all-day chips → featured "Next Up" glass card → pill event rows
+     * app.js changes needed: same function, new HTML template inside.
+     */
+    function renderDayView(date) {
+      const titleEl = document.getElementById('calDayTitle');
+      if (titleEl) titleEl.textContent = date.toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric'
+      });
+
+      const isToday  = date.toDateString() === SIM_TODAY.toDateString();
+      const prevBtn  = document.getElementById('calPrevDay');
+      const nextBtn  = document.getElementById('calNextDay');
+      if (prevBtn) prevBtn.classList.toggle('disabled', isToday);
+      if (nextBtn) nextBtn.classList.remove('disabled');
+
+      const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      const dayEvents = (calendarMonthEvents || []).filter(ev => {
+        const d = ev.start.dateTime
+          ? new Date(ev.start.dateTime)
+          : (() => { const p = ev.start.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })();
+        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` === dayKey;
+      });
+
+      dayEvents.sort((a,b) => {
+        const aAD = !a.start.dateTime, bAD = !b.start.dateTime;
+        if (aAD && !bAD) return -1; if (!aAD && bAD) return 1;
+        return new Date(a.start.dateTime||a.start.date) - new Date(b.start.dateTime||b.start.date);
+      });
+
+      const el = document.getElementById('calDayEvents');
+      if (!el) return;
+      if (dayEvents.length === 0) {
+        el.innerHTML = '<div class="cal-day-empty">Nothing scheduled.</div>'; return;
+      }
+
+      const allDayEvts  = dayEvents.filter(e => !e.start.dateTime);
+      const timedEvts   = dayEvents.filter(e =>  e.start.dateTime);
+
+      let html = '';
+
+      // ── All-day chips
+      if (allDayEvts.length) {
+        html += '<div class="cal-allday-strip">';
+        allDayEvts.forEach(ev => {
+          const isHol = /holiday/i.test(ev.summary||'');
+          const cls   = isHol ? 'cal-allday-chip holiday' : 'cal-allday-chip secondary';
+          html += `<div class="${cls}">${ev.summary||'(No title)'}</div>`;
+        });
+        html += '</div>';
+      }
+
+      // ── Featured "Next Up" card — first timed event of the day
+      let remaining = [...timedEvts];
+      if (timedEvts.length) {
+        const feat = timedEvts[0];
+        remaining  = timedEvts.slice(1);
+        const isHol = /holiday/i.test(feat.summary||'');
+        const acCls = isHol ? 'holiday' : '';
+        const s  = new Date(feat.start.dateTime);
+        const e  = new Date(feat.end.dateTime);
+        const ts = s.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+        const te = e.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+        const loc = feat.location ? `<div class="cal-featured-location">📍 ${feat.location}</div>` : '';
+        html += `<div class="cal-featured-card ${acCls}">
+          <div class="cal-featured-label">Next Up</div>
+          <div class="cal-featured-title">${feat.summary||'(No title)'}</div>
+          <div class="cal-featured-time">${ts} — ${te}</div>${loc}
+        </div>`;
+      }
+
+      // ── Pill rows for remaining events
+      remaining.forEach(ev => {
+        const s   = new Date(ev.start.dateTime);
+        const ts  = s.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+        html += `<div class="cal-event-pill">
+          <div class="cal-pill-time">${ts}</div>
+          <div class="cal-pill-divider"></div>
+          <div class="cal-pill-title">${ev.summary||'(No title)'}</div>
+        </div>`;
+      });
+
+      el.innerHTML = html;
+    }
+
+    /**
+     * renderWeekGrid() — ENHANCED vs app.js
+     * Same 7-col structure; adds .cal-week-today-label, large extralight date num.
+     * app.js changes: add cal-week-today-label span; change date-num font via CSS.
+     */
+    function renderWeekGrid() {
+      const ws   = calendarWeekStart;
+      const today = SIM_TODAY;
+      const DOW  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+      const byDay = {};
+      (calendarMonthEvents||[]).forEach(ev => {
+        const d = ev.start.dateTime
+          ? new Date(ev.start.dateTime)
+          : (()=>{ const p=ev.start.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })();
+        const k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        if (!byDay[k]) byDay[k]=[]; byDay[k].push(ev);
+      });
+
+      const we  = new Date(ws); we.setDate(we.getDate()+6);
+      const fmt = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const titleEl = document.getElementById('calWeekTitle');
+      if (titleEl) titleEl.textContent = `${fmt(ws)} – ${fmt(we)}, ${we.getFullYear()}`;
+
+      const prevBtn = document.getElementById('calPrevWeek');
+      const nextBtn = document.getElementById('calNextWeek');
+      if (prevBtn) prevBtn.classList.toggle('disabled', ws.getTime() <= weekStartFor(today).getTime());
+      if (nextBtn) nextBtn.classList.remove('disabled');
+
+      const grid = document.getElementById('calWeekGrid');
+      if (!grid) return;
+
+      let html = '';
+      for (let i = 0; i < 7; i++) {
+        const d   = new Date(ws); d.setDate(d.getDate()+i);
+        const k   = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        const isT = d.toDateString() === today.toDateString();
+        const evts = (byDay[k]||[]).sort((a,b) => {
+          const aAD=!a.start.dateTime, bAD=!b.start.dateTime;
+          if (aAD&&!bAD) return -1; if (!aAD&&bAD) return 1;
+          return new Date(a.start.dateTime||a.start.date)-new Date(b.start.dateTime||b.start.date);
+        });
+
+        const MAX = 4;
+        let evtHtml = '';
+        evts.slice(0,MAX).forEach(ev => {
+          const isAD = !ev.start.dateTime;
+          const ts   = isAD ? 'All day'
+            : new Date(ev.start.dateTime).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+          let bCls = 'cal-week-event-bar';
+          if (isAD) bCls += ' allday';
+          if (ev.summary&&/holiday/i.test(ev.summary)) bCls = 'cal-week-event-bar holiday';
+          evtHtml += `<div class="cal-week-event">
+            <div class="${bCls}"></div>
+            <div class="cal-week-event-inner">
+              <div class="cal-week-event-time${isAD?' allday':''}">${ts}</div>
+              <div class="cal-week-event-title">${ev.summary||'(No title)'}</div>
+            </div>
+          </div>`;
+        });
+        if (evts.length > MAX) evtHtml += `<div class="cal-week-overflow">+${evts.length-MAX} more</div>`;
+
+        const todayLabel = isT ? '<div class="cal-week-today-label">Today</div>' : '';
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        html += `<div class="cal-week-col${isT?' today':''}" data-date="${dateKey}">
+          <div class="cal-week-col-header">
+            <span class="cal-week-dow">${DOW[i]}</span>
+            <span class="cal-week-date-num">${d.getDate()}</span>
+            ${todayLabel}
+          </div>
+          <div class="cal-week-events">${evtHtml}</div>
+        </div>`;
+      }
+      grid.innerHTML = html;
+    }
+
+    /**
+     * renderMonthGrid() — ENHANCED vs app.js
+     * Same grid + NEW: populates #calMonthSidebar with upcoming event cards.
+     * app.js changes: add sidebar div to calendarMonthView HTML in setupCalendarGrid(),
+     * then call renderMonthSidebar() from within renderMonthGrid().
+     */
+    function renderMonthGrid() {
+      const year  = calendarMonthDate.getFullYear();
+      const month = calendarMonthDate.getMonth();
+
+      const titleEl = document.getElementById('calMonthTitle');
+      if (titleEl) titleEl.textContent = calendarMonthDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+
+      const grid = document.getElementById('calGrid');
+      if (!grid) return;
+
+      const firstDOW    = new Date(year,month,1).getDay();
+      const daysInMonth = new Date(year,month+1,0).getDate();
+      const prevDays    = new Date(year,month,0).getDate();
+      const todayKey    = `${SIM_TODAY.getFullYear()}-${SIM_TODAY.getMonth()}-${SIM_TODAY.getDate()}`;
+
+      const byDay = {};
+      (calendarMonthEvents||[]).forEach(ev => {
+        let d;
+        if (ev.start.dateTime) { d = new Date(ev.start.dateTime); }
+        else { const p=ev.start.date.split('-'); d=new Date(+p[0],+p[1]-1,+p[2]); }
+        const k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        if (!byDay[k]) byDay[k]=[]; byDay[k].push(ev);
+      });
+
+      const pad = n => String(n).padStart(2,'0');
+      let html = '';
+
+      // Leading
+      for (let i=firstDOW-1; i>=0; i--) {
+        html += `<div class="cal-day-cell other-month"><div class="cal-day-num">${prevDays-i}</div></div>`;
+      }
+      // Current month
+      for (let day=1; day<=daysInMonth; day++) {
+        const k    = `${year}-${month}-${day}`;
+        const isT  = k === todayKey;
+        const evts = byDay[k]||[];
+        const da   = `${year}-${pad(month+1)}-${pad(day)}`;
+        let dots = '';
+        if (evts.length) {
+          evts.slice(0,3).forEach(ev => {
+            let cls='cal-event-dot';
+            if (!ev.start.dateTime) cls+=' allday';
+            if (ev.summary&&/holiday/i.test(ev.summary)) cls+=' holiday';
+            dots += `<div class="${cls}"></div>`;
+          });
+          if (evts.length>3) dots += `<div class="cal-event-more">+${evts.length-3}</div>`;
+        }
+        let cc = 'cal-day-cell';
+        if (isT)        cc += ' today';
+        if (evts.length) cc += ' has-events';
+        html += `<div class="${cc}" data-date="${da}">
+          <div class="cal-day-num">${day}</div>
+          <div class="cal-event-dots">${dots}</div>
+        </div>`;
+      }
+      // Trailing
+      const totalCells = firstDOW + daysInMonth;
+      const trailing   = totalCells%7===0 ? 0 : 7-(totalCells%7);
+      for (let d=1; d<=trailing; d++) {
+        html += `<div class="cal-day-cell other-month"><div class="cal-day-num">${d}</div></div>`;
+      }
+      grid.innerHTML = html;
+
+      // ── Sidebar: upcoming events from today onwards, sorted, max 6
+      renderMonthSidebar();
+    }
+
+    function renderMonthSidebar() {
+      const sidebar   = document.getElementById('calMonthSidebar');
+      const countEl   = document.getElementById('calSidebarCount');
+      if (!sidebar) return;
+
+      // All events from today onward, sorted by start
+      const upcoming = (calendarMonthEvents||[]).filter(ev => {
+        const d = ev.start.dateTime
+          ? new Date(ev.start.dateTime)
+          : (()=>{ const p=ev.start.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })();
+        return d >= SIM_TODAY;
+      }).sort((a,b) => {
+        const da = a.start.dateTime ? new Date(a.start.dateTime) : (()=>{ const p=a.start.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })();
+        const db = b.start.dateTime ? new Date(b.start.dateTime) : (()=>{ const p=b.start.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })();
+        return da - db;
+      }).slice(0, 7);
+
+      if (countEl) countEl.textContent = `${upcoming.length} events`;
+
+      let html = '';
+      upcoming.forEach(ev => {
+        const isAD  = !ev.start.dateTime;
+        const isHol = /holiday/i.test(ev.summary||'');
+        let cls = 'cal-sidebar-event';
+        if (isAD) cls += isHol ? ' holiday' : ' allday';
+
+        const d = isAD
+          ? (()=>{ const p=ev.start.date.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); })()
+          : new Date(ev.start.dateTime);
+
+        const dateStr = d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+        const timeStr = isAD ? 'All day'
+          : d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+
+        const locHtml = ev.location
+          ? `<div class="cal-sidebar-event-time">📍 ${ev.location}</div>` : '';
+
+        html += `<div class="${cls}">
+          <div class="cal-sidebar-event-inner">
+            <div class="cal-sidebar-event-date">${dateStr}</div>
+            <div class="cal-sidebar-event-title">${ev.summary||'(No title)'}</div>
+            <div class="cal-sidebar-event-time">${timeStr}</div>
+            ${locHtml}
+          </div>
+        </div>`;
+      });
+
+      sidebar.innerHTML = html || '<div style="color:#9ca9b5;font-size:12px;padding:16px 0">No upcoming events</div>';
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VIEW SWITCHER
+    // ════════════════════════════════════════════════════════════════════════
+    function showCalendarView(mode) {
+      calendarViewMode = mode;
+      const mv = document.getElementById('calendarMonthView');
+      const wv = document.getElementById('calendarWeekView');
+      const dv = document.getElementById('calendarDayView');
+      if (mv) mv.style.display = mode==='month' ? 'flex' : 'none';
+      if (wv) wv.style.display = mode==='week'  ? 'flex' : 'none';
+      if (dv) dv.style.display = mode==='day'   ? 'flex' : 'none';
+      document.querySelectorAll('.cal-toggle-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.view===mode);
+      });
+      if      (mode==='month') renderMonthGrid();
+      else if (mode==='week')  renderWeekGrid();
+      else if (mode==='day')   renderDayView(calendarDayDate);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // NAVIGATION  (simulator allows backward day nav for exploration)
+    // ════════════════════════════════════════════════════════════════════════
+    function navigateDay(dir) {
+      const d = new Date(calendarDayDate); d.setDate(d.getDate()+dir);
+      calendarDayDate = d; calendarMonthDate = new Date(d); renderDayView(d);
+    }
+    function navigateWeek(dir) {
+      const ws = new Date(calendarWeekStart); ws.setDate(ws.getDate()+dir*7);
+      calendarWeekStart = ws; calendarMonthDate = new Date(ws); renderWeekGrid();
+    }
+    function navigateMonth(dir) {
+      const d = new Date(calendarMonthDate); d.setDate(1); d.setMonth(d.getMonth()+dir);
+      calendarMonthDate = d; renderMonthGrid();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // EVENT LISTENERS
+    // ════════════════════════════════════════════════════════════════════════
+    document.getElementById('calViewToggle').addEventListener('click', e => {
+      const btn = e.target.closest('.cal-toggle-btn'); if (!btn) return;
+      showCalendarView(btn.dataset.view);
+    });
+    document.getElementById('calPrevMonth').addEventListener('click', () => navigateMonth(-1));
+    document.getElementById('calNextMonth').addEventListener('click', () => navigateMonth(1));
+    document.getElementById('calPrevWeek').addEventListener('click',  () => navigateWeek(-1));
+    document.getElementById('calNextWeek').addEventListener('click',  () => navigateWeek(1));
+    document.getElementById('calPrevDay').addEventListener('click',   () => navigateDay(-1));
+    document.getElementById('calNextDay').addEventListener('click',   () => navigateDay(1));
+
+    // Week column tap → day drill-down
+    document.getElementById('calWeekGrid').addEventListener('click', e => {
+      const col = e.target.closest('.cal-week-col'); if (!col) return;
+      const ds = col.getAttribute('data-date'); if (!ds) return;
+      const p = ds.split('-');
+      calendarDayDate = new Date(+p[0], +p[1]-1, +p[2]);
+      showCalendarView('day');
+    });
+
+    // Month cell tap → day drill-down
+    document.getElementById('calGrid').addEventListener('click', e => {
+      const cell = e.target.closest('.cal-day-cell:not(.other-month)'); if (!cell) return;
+      const ds = cell.getAttribute('data-date'); if (!ds) return;
+      const p  = ds.split('-');
+      calendarDayDate   = new Date(+p[0],+p[1]-1,+p[2]);
+      calendarMonthDate = new Date(calendarDayDate);
+      showCalendarView('day');
+    });
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CAROUSEL NAVIGATION
+    // ════════════════════════════════════════════════════════════════════════
+    let currentCard = 0;
+    const TOTAL_CARDS = 4;
+    const AUTO_RETURN_MS = 60000; // 60s inactivity → return to Card 0
+    let _returnTimer = null;
+
+    function goToCard(index) {
+      index = Math.max(0, Math.min(TOTAL_CARDS - 1, index));
+      currentCard = index;
+      const pct = -(index * 25); // each card = 25% of 400%-wide carousel
+      document.getElementById('simCarousel').style.transform = `translateX(${pct}%)`;
+      // Update dots
+      document.querySelectorAll('.sim-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === index);
+      });
+      updateHeaderClocks();
+      if (index === 2) showCalendarView('week'); // Card 2 is Calendar
+      // Auto-return to home after inactivity
+      clearTimeout(_returnTimer);
+      if (index !== 0) {
+        _returnTimer = setTimeout(() => goToCard(0), AUTO_RETURN_MS);
+      }
+    }
+
+    document.getElementById('simNavLeft').addEventListener('click', () => goToCard(currentCard - 1));
+    document.getElementById('simNavRight').addEventListener('click', () => goToCard(currentCard + 1));
+
+    document.querySelectorAll('.sim-dot').forEach(dot => {
+      dot.addEventListener('click', () => goToCard(Number(dot.dataset.card)));
+    });
+
+    // Keyboard left/right to navigate cards (when not in calendar day view)
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft')  goToCard(currentCard - 1);
+      if (e.key === 'ArrowRight') goToCard(currentCard + 1);
+    });
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CLOCK — update ambient + header clocks
+    // ════════════════════════════════════════════════════════════════════════
+    function updateHeaderClocks() {
+      const t = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      ['simClockWeather','simClockSummary','simClock'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = t;
+      });
+      const amb = document.getElementById('simAmbientClock');
+      if (amb) amb.textContent = t;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // INIT
+    // ════════════════════════════════════════════════════════════════════════
+    initPhotos();
+    goToCard(0);            // start on ambient card
+    showCalendarView('week');
+    updateHeaderClocks();
+    setInterval(updateHeaderClocks, 1000);
+  </script>
+</body>
+</html>

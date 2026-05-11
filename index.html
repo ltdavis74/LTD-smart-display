@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Display</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="smart-display">
+
+
+        <!-- Main Carousel Container -->
+        <div class="carousel-container">
+            <div class="carousel-wrapper slide-left-4" id="carouselWrapper">
+                <!-- Card 1: Google Photos with Weather/Time Overlay -->
+                <div class="carousel-card" id="photosCard">
+                    <div class="photos-container">
+                        <div class="photo-slideshow" id="photoSlideshow">
+                            <div class="loading-photos">
+                                <i class="fas fa-images"></i>
+                                <p>Loading photos...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Calendar Events Card (Upper Right) -->
+                        <div class="calendar-card" id="calendarCard">
+                            <div class="calendar-header">
+                                <i class="fas fa-calendar-alt"></i>
+                                <span>Upcoming Events</span>
+                            </div>
+                            <div class="calendar-content" id="calendarContent">
+                                <div class="loading">Loading events...</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Weather and Time Overlay -->
+                        <div class="overlay-info">
+                            <div class="time-display" id="timeDisplay">
+                                <div class="time">12:00</div>
+                                <div class="date">January 1, 2024</div>
+                                <div class="weather-display" id="weatherDisplay">
+                                    <div class="weather-icon">
+                                        <i class="fas fa-sun"></i>
+                                    </div>
+                                    <div class="weather-info">
+                                        <div class="temperature">22°C</div>
+                                        <div class="condition">Sunny</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Daily Summary -->
+                <div class="carousel-card" id="summaryCard">
+                    <div class="summary-container">
+                        <div class="summary-header">
+                            <i class="fas fa-robot"></i>
+                            <span>Daily Summary</span>
+                            <div class="header-time-display"></div>
+                            <button class="refresh-btn" id="summaryRefreshBtn" title="Refresh Summary">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button class="ha-back-btn" id="summaryBackBtn">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="settings-btn" id="summarySettingsBtn">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                        <div class="summary-content" id="summaryContent">
+                            <div class="loading">Generating your daily summary...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Home Assistant Integration -->
+                <div class="carousel-card" id="homeAssistantCard">
+                    <div class="ha-container">
+                        <div class="ha-header">
+                            <i class="fas fa-home"></i>
+                            <span>Home Assistant</span>
+                            <div class="header-time-display"></div>
+                            <button class="ha-back-btn" id="haBackBtn">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="settings-btn" id="settingsBtn">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                        <div class="ha-content">
+                            <iframe 
+                                id="homeAssistantFrame"
+                                src="http://your-home-assistant-url:8123"
+                                frameborder="0"
+                                allowfullscreen>
+                            </iframe>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 4: Weather Forecast -->
+                <div class="carousel-card" id="forecastCard">
+                    <div class="forecast-container">
+                        <div class="forecast-header">
+                            <i class="fas fa-cloud-sun"></i>
+                            <span>5-Day Forecast</span>
+                            <div class="header-time-display"></div>
+                            <button class="ha-back-btn" id="forecastBackBtn">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="settings-btn" id="forecastSettingsBtn">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                        <div class="forecast-content" id="forecastContent">
+                            <div class="loading">Loading forecast...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 5: Calendar Agenda -->
+                <div class="carousel-card" id="agendaCard">
+                    <div class="agenda-container">
+                        <div class="agenda-header">
+                            <i class="fas fa-calendar-day"></i>
+                            <span>Next 7 Days</span>
+                            <div class="header-time-display"></div>
+                            <button class="ha-back-btn" id="agendaBackBtn">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="settings-btn" id="agendaSettingsBtn">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                        <div class="agenda-content" id="agendaContent">
+                            <div class="loading">Loading agenda...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+
+        <!-- Touch Gesture Area -->
+        <div class="touch-area left" id="leftTouchArea"></div>
+        <div class="touch-area right" id="rightTouchArea"></div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="close-btn" id="closeSettings">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label for="photoQuery">Ambient Photo Query:</label>
+                    <input type="text" id="photoQuery" placeholder="nature landscape" value="nature landscape">
+                </div>
+                <div class="setting-group">
+                    <label for="haUrl">Home Assistant URL:</label>
+                    <input type="text" id="haUrl" placeholder="http://your-ha-url:8123">
+                </div>
+                <div class="setting-group">
+                    <label for="latitude">Latitude:</label>
+                    <input type="number" id="latitude" step="0.000001" placeholder="40.7128">
+                </div>
+                <div class="setting-group">
+                    <label for="longitude">Longitude:</label>
+                    <input type="number" id="longitude" step="0.000001" placeholder="-74.0060">
+                </div>
+                <div class="setting-group">
+                    <label for="summaryEnabled">Daily Summary:</label>
+                    <select id="summaryEnabled">
+                        <option value="true">Enabled</option>
+                        <option value="false">Disabled</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="userName">Your Name (for Daily Summary):</label>
+                    <input type="text" id="userName" placeholder="Enter your name" value="">
+                </div>
+                <div class="setting-group">
+                    <label for="summaryTime">Summary Time:</label>
+                    <input type="time" id="summaryTime" value="08:00">
+                </div>
+                <div class="setting-group">
+                    <label>System Actions:</label>
+                    <div class="action-buttons">
+                        <button class="refresh-btn" id="refreshPage" title="Refresh Page">
+                            <i class="fas fa-sync-alt"></i> Refresh Page
+                        </button>
+                    </div>
+                </div>
+                <button class="save-btn" id="saveSettings">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hourly Forecast Overlay -->
+    <div class="hourly-forecast-overlay" id="hourlyForecastOverlay">
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <h3 id="hourlyForecastTitle">Hourly Forecast</h3>
+                <button class="close-btn" id="closeHourlyForecast">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="overlay-body">
+                <div class="hourly-forecast-grid" id="hourlyForecastGrid">
+                    <!-- Hourly forecast items will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

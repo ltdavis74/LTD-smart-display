@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#9ca9b5",
+                        "inverse-primary": "#506071",
+                        "on-primary-fixed": "#0c1d2b",
+                        "on-error": "#690005",
+                        "surface-dim": "#121416",
+                        "outline-variant": "#43474c",
+                        "secondary-fixed": "#bcf0ae",
+                        "surface": "#121416",
+                        "secondary": "#a1d494",
+                        "inverse-on-surface": "#2f3133",
+                        "on-tertiary-fixed": "#101d26",
+                        "surface-container-low": "#1a1c1e",
+                        "surface-container": "#1e2022",
+                        "primary": "#b8c8db",
+                        "on-surface": "#e2e2e5",
+                        "on-surface-variant": "#c4c6cd",
+                        "tertiary-fixed-dim": "#bbc8d5",
+                        "on-secondary-fixed-variant": "#23501e",
+                        "inverse-surface": "#e2e2e5",
+                        "secondary-container": "#23501e",
+                        "surface-variant": "#333537",
+                        "primary-fixed-dim": "#b8c8db",
+                        "surface-tint": "#b8c8db",
+                        "on-primary-container": "#98a9bb",
+                        "background": "#121416",
+                        "on-primary-fixed-variant": "#394858",
+                        "primary-container": "#2e3e4d",
+                        "on-background": "#e2e2e5",
+                        "surface-bright": "#37393b",
+                        "on-secondary-fixed": "#002201",
+                        "tertiary-fixed": "#d7e4f1",
+                        "surface-container-high": "#282a2c",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#333537",
+                        "on-primary": "#223241",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary": "#25323c",
+                        "tertiary": "#bbc8d5",
+                        "outline": "#8e9197",
+                        "on-tertiary-fixed-variant": "#3c4853",
+                        "surface-container-lowest": "#0c0e10",
+                        "error-container": "#93000a",
+                        "primary-fixed": "#d3e4f8",
+                        "tertiary-container": "#313e48",
+                        "on-secondary": "#0a3909",
+                        "secondary-fixed-dim": "#a1d494",
+                        "on-secondary-container": "#90c283"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .boreal-gradient {
+            background: linear-gradient(135deg, rgba(184, 200, 219, 0.15) 0%, rgba(46, 62, 77, 0.05) 100%);
+        }
+        .glass-panel {
+            background: rgba(51, 53, 55, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body overflow-hidden h-[600px] w-[1024px]">
+<!-- SideNavBar (Shared Component) -->
+<aside class="fixed left-0 top-0 h-[600px] w-24 rounded-r-3xl bg-slate-900/60 backdrop-blur-2xl shadow-[20px_0_40px_rgba(12,14,16,0.4)] flex flex-col items-center py-8 space-y-12 z-50">
+<div class="flex flex-col items-center space-y-2">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover" data-alt="professional portrait of a man with a beard wearing a wool sweater in a cabin setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_8tLUlGgYrxgf7qE2n1hVjtIFCWG30cwLqnvEcHdwnC-qgmKU3jzTQfduI8oxhvVXpz3U5CCHxykzHbQT1zOILNdsB7qdUMnYlsnda0e-kjKmMo67cbttSrxw2R6wZCscGnSYzKvJTnSAd2NH9ADKKpBimtRSmWjkTltlTtXRzjFFoWyO_FDugN8PNfEJpdOGk9eX-3dmDwBq2D4vKJCztLc0svsCZWg3u0UpWjKwTl61aL9GbLtoT_pbY4A7yyclKu5zk-Z5MRV9"/>
+</div>
+<span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Sentinel</span>
+</div>
+<nav class="flex flex-col items-center space-y-8 w-full">
+<!-- Home (Inactive) -->
+<button class="flex flex-col items-center justify-center text-slate-500 p-4 hover:bg-slate-800/50 transition-colors duration-300 group">
+<span class="material-symbols-outlined text-3xl group-active:scale-90 transition-transform">home</span>
+<span class="font-manrope font-medium text-[10px] mt-1">Home</span>
+</button>
+<!-- Calendar/Weather (Inactive) -->
+<button class="flex flex-col items-center justify-center text-slate-500 p-4 hover:bg-slate-800/50 transition-colors duration-300 group">
+<span class="material-symbols-outlined text-3xl group-active:scale-90 transition-transform">cloudy_snowing</span>
+<span class="font-manrope font-medium text-[10px] mt-1">Weather</span>
+</button>
+<!-- Settings (Inactive) -->
+<button class="flex flex-col items-center justify-center text-slate-500 p-4 hover:bg-slate-800/50 transition-colors duration-300 group">
+<span class="material-symbols-outlined text-3xl group-active:scale-90 transition-transform">settings</span>
+<span class="font-manrope font-medium text-[10px] mt-1">Settings</span>
+</button>
+</nav>
+</aside>
+<!-- TopAppBar (Shared Component) -->
+<header class="fixed top-0 left-24 right-0 px-10 py-6 bg-slate-900/40 backdrop-blur-xl shadow-2xl shadow-black/20 flex justify-between items-center z-40">
+<h1 class="text-2xl font-extrabold text-slate-100 tracking-tighter">Boreal Calendar</h1>
+<div class="flex items-center space-x-8">
+<nav class="flex space-x-6 font-manrope font-bold tracking-tight uppercase text-sm">
+<a class="text-slate-400 hover:text-white transition-colors duration-300" href="#">Month</a>
+<a class="text-blue-300 border-b-2 border-blue-400 pb-1 hover:text-white transition-colors duration-300" href="#">Week</a>
+<a class="text-slate-400 hover:text-white transition-colors duration-300" href="#">Day</a>
+</nav>
+<div class="flex items-center space-x-4 text-blue-200">
+<button class="material-symbols-outlined hover:text-white transition-colors duration-300 active:scale-95 duration-200">today</button>
+<button class="material-symbols-outlined hover:text-white transition-colors duration-300 active:scale-95 duration-200">filter_list</button>
+</div>
+</div>
+</header>
+<!-- Main Content: Rolling Week Canvas -->
+<main class="ml-24 pt-24 pb-8 px-10 h-full overflow-hidden bg-surface">
+<!-- Subtle Vista Background (Canadian Shield Vibe) -->
+<div class="fixed inset-0 -z-10 ml-24 pointer-events-none opacity-20">
+<img class="w-full h-full object-cover" data-alt="moody atmospheric landscape of rocky cliffs and dark pine forests in the canadian shield at twilight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2UVBM9IYZOI3b8pVgK7y4SWkko04NA2-w4m3HShbe551XKoeNx5CkQYsFINZKao11bb8I6ZXqOIJDKrxI5T59FOje4tqfpbke_92MxHr7OLtndy5E8ixO8MQhNaQthW8RgMmspwCR1nXGe8ahO8H-I58U6r6ODn2KLn315gyRShqqP0wIa3l9Qs9l4rTscQPptNTFGCNohpgrXxCmUFtjc1Bc5IqpVBEnsKcnLxBBxvVGXt4dVLuUs6J6TsFrQXt8ZYOsGJ_HgIFe"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/80 to-transparent"></div>
+</div>
+<!-- Rolling Week Grid -->
+<div class="flex h-full gap-4 overflow-x-auto no-scrollbar pb-4">
+<!-- Day 1: Today -->
+<div class="flex-shrink-0 w-64 h-full flex flex-col space-y-4">
+<div class="flex flex-col">
+<span class="text-secondary font-bold text-sm tracking-widest uppercase">Today</span>
+<h2 class="text-5xl font-extrabold tracking-tighter text-on-surface">Oct 24</h2>
+<span class="text-on-surface-variant font-medium">Thursday</span>
+</div>
+<div class="flex-grow space-y-4 overflow-y-auto no-scrollbar">
+<!-- Event Card: High Priority -->
+<div class="glass-panel p-5 rounded-full border-l-4 border-primary shadow-lg">
+<span class="text-[10px] font-bold text-primary tracking-widest uppercase block mb-1">09:00 — 10:30</span>
+<h3 class="text-lg font-bold leading-tight">Board Strategy Review</h3>
+<p class="text-sm text-on-surface-variant mt-2">Executive Conference Room</p>
+</div>
+<!-- Event Card: Normal -->
+<div class="glass-panel p-5 rounded-full shadow-md">
+<span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">12:30 — 13:30</span>
+<h3 class="text-lg font-semibold leading-tight">Lunch with Forest Council</h3>
+<p class="text-sm text-on-surface-variant mt-2">The Granite Grill</p>
+</div>
+<!-- Event Card: Secondary -->
+<div class="glass-panel p-5 rounded-full border-l-4 border-secondary shadow-md">
+<span class="text-[10px] font-bold text-secondary tracking-widest uppercase block mb-1">15:00 — 16:00</span>
+<h3 class="text-lg font-semibold leading-tight">Site Survey: Muskoka</h3>
+<div class="flex items-center mt-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-xs mr-1">location_on</span>
+<span class="text-sm">Sector 7-B</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Day 2: Tomorrow -->
+<div class="flex-shrink-0 w-64 h-full flex flex-col space-y-4">
+<div class="flex flex-col">
+<span class="text-on-surface-variant font-bold text-sm tracking-widest uppercase">Tomorrow</span>
+<h2 class="text-5xl font-extrabold tracking-tighter text-on-surface/80">Oct 25</h2>
+<span class="text-on-surface-variant font-medium">Friday</span>
+</div>
+<div class="flex-grow space-y-4 overflow-y-auto no-scrollbar">
+<div class="glass-panel p-5 rounded-full shadow-md opacity-90">
+<span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">10:00 — 11:00</span>
+<h3 class="text-lg font-semibold leading-tight">Deep Focus Session</h3>
+</div>
+<div class="glass-panel p-5 rounded-full border-l-4 border-tertiary shadow-md opacity-90">
+<span class="text-[10px] font-bold text-tertiary tracking-widest uppercase block mb-1">14:00 — 15:30</span>
+<h3 class="text-lg font-semibold leading-tight">Project Aurora Launch</h3>
+<p class="text-sm text-on-surface-variant mt-2">Virtual Link</p>
+</div>
+</div>
+</div>
+<!-- Day 3 -->
+<div class="flex-shrink-0 w-64 h-full flex flex-col space-y-4">
+<div class="flex flex-col">
+<span class="text-on-surface-variant/40 font-bold text-sm tracking-widest uppercase">Weekend</span>
+<h2 class="text-5xl font-extrabold tracking-tighter text-on-surface/60">Oct 26</h2>
+<span class="text-on-surface-variant/60 font-medium">Saturday</span>
+</div>
+<div class="flex-grow flex items-center justify-center">
+<div class="text-center px-6">
+<span class="material-symbols-outlined text-4xl text-on-surface-variant/20 mb-2">event_available</span>
+<p class="text-sm text-on-surface-variant/40 italic">No events scheduled</p>
+</div>
+</div>
+</div>
+<!-- Day 4 -->
+<div class="flex-shrink-0 w-64 h-full flex flex-col space-y-4">
+<div class="flex flex-col">
+<span class="text-on-surface-variant/40 font-bold text-sm tracking-widest uppercase">Weekend</span>
+<h2 class="text-5xl font-extrabold tracking-tighter text-on-surface/60">Oct 27</h2>
+<span class="text-on-surface-variant/60 font-medium">Sunday</span>
+</div>
+<div class="flex-grow space-y-4">
+<div class="glass-panel p-5 rounded-full shadow-sm opacity-60">
+<span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">08:00</span>
+<h3 class="text-lg font-semibold leading-tight">Morning Trail Run</h3>
+</div>
+</div>
+</div>
+<!-- Day 5 -->
+<div class="flex-shrink-0 w-64 h-full flex flex-col space-y-4">
+<div class="flex flex-col">
+<span class="text-on-surface-variant/40 font-bold text-sm tracking-widest uppercase">Next Week</span>
+<h2 class="text-5xl font-extrabold tracking-tighter text-on-surface/40">Oct 28</h2>
+<span class="text-on-surface-variant/40 font-medium">Monday</span>
+</div>
+<div class="flex-grow space-y-4">
+<div class="glass-panel p-5 rounded-full border-l-4 border-primary/40 shadow-sm opacity-40">
+<span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">09:00</span>
+<h3 class="text-lg font-semibold leading-tight">Weekly Sync</h3>
+</div>
+</div>
+</div>
+</div>
+<!-- Floating Quick Action for Context (Task Specified Suppression Logic: None on List View, but here it fits as a Floating Anchor) -->
+<button class="fixed bottom-10 right-10 w-16 h-16 bg-primary text-on-primary rounded-full shadow-[0_20_40_rgba(12,14,16,0.6)] flex items-center justify-center transition-transform active:scale-90 hover:bg-primary/90">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</main>
+<!-- Bottom Status Bar (Ambient Info) -->
+<footer class="fixed bottom-4 left-32 right-8 flex justify-between items-center text-[10px] font-bold tracking-[0.2em] text-on-surface-variant/40 uppercase">
+<div class="flex items-center space-x-4">
+<span>Lat: 45.4215° N</span>
+<span>Lon: 75.6972° W</span>
+</div>
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-xs">filter_vintage</span>
+<span>Autumn Solstice Cycle</span>
+</div>
+</footer>
+</body></html>
