@@ -16,6 +16,13 @@ The project lives in two places simultaneously:
 
 **GitHub:** Private repo `https://github.com/YOUR_GITHUB_USERNAME/YOUR_PRIVATE_REPO` (personal config intact). Public repo `https://github.com/ltdavis74/LTD-smart-display` (scrubbed). Private is canonical — changes flow private → scrub → public, never the reverse.
 
+**NEVER push directly to the public repo.** Always sync via the wrapper script from the project root:
+```powershell
+cd "C:\Users\ltdav\OneDrive\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project"
+.\sync_to_public.ps1
+```
+The script runs the scrubber, verifies no personal data leaked, then commits and pushes. Skipping it risks exposing personal data publicly.
+
 `simulator.html` is the design/dev scratchpad — a self-contained HTML file that mirrors the Pi display. Changes proven there get mapped back into the production files (`app.js`, `index.html`, `styles.css`, `server.js`).
 
 ---
