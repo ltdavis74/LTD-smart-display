@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Display</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Manrope:wght@200;300;400&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="smart-display">
@@ -25,6 +27,24 @@
                             </div>
                         </div>
                         
+                        <!-- Lists Panel (Upper Left) — Keep (grocery/Costco) + Google Tasks (to-dos) -->
+                        <div class="tasks-panel" id="listsPanel">
+                            <div class="task-col">
+                                <div class="task-col-title">Grocery</div>
+                                <div id="groceryList"><div class="tasks-empty">Loading…</div></div>
+                            </div>
+                            <div class="tasks-divider"></div>
+                            <div class="task-col">
+                                <div class="task-col-title">Costco</div>
+                                <div id="costcoList"><div class="tasks-empty">Loading…</div></div>
+                            </div>
+                            <div class="tasks-divider"></div>
+                            <div class="task-col">
+                                <div class="task-col-title">My Tasks</div>
+                                <div id="tasksList"><div class="tasks-empty">Loading…</div></div>
+                            </div>
+                        </div>
+
                         <!-- Calendar Events Card (Upper Right) -->
                         <div class="calendar-card" id="calendarCard">
                             <div class="calendar-header">
@@ -36,19 +56,34 @@
                             </div>
                         </div>
                         
+                        <!-- Photo info overlay — shown by "This Picture" button -->
+                        <div class="photo-info-overlay" id="photoInfoOverlay">
+                            <div class="photo-info-panel">
+                                <button class="photo-info-dismiss" id="photoInfoDismiss"><i class="fas fa-times"></i></button>
+                                <div class="photo-info-label">Now Showing</div>
+                                <div class="photo-info-title" id="photoInfoTitle"></div>
+                                <div class="photo-info-path" id="photoInfoPath"></div>
+                            </div>
+                        </div>
+
                         <!-- Weather and Time Overlay -->
                         <div class="overlay-info">
                             <div class="time-display" id="timeDisplay">
                                 <div class="time">12:00</div>
                                 <div class="date">January 1, 2024</div>
-                                <div class="weather-display" id="weatherDisplay">
-                                    <div class="weather-icon">
-                                        <i class="fas fa-sun"></i>
+                                <div class="wx-pill-row">
+                                    <div class="weather-display" id="weatherDisplay">
+                                        <div class="weather-icon">
+                                            <i class="fas fa-sun"></i>
+                                        </div>
+                                        <div class="weather-info">
+                                            <div class="temperature">22°C</div>
+                                            <div class="condition">Sunny</div>
+                                        </div>
                                     </div>
-                                    <div class="weather-info">
-                                        <div class="temperature">22°C</div>
-                                        <div class="condition">Sunny</div>
-                                    </div>
+                                    <button class="cal-ambient-shortcut-btn" id="weatherShortcutBtn" onclick="smartDisplay.goToCard(3)">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>Weather
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -88,9 +123,6 @@
                             <button class="ha-back-btn" id="haBackBtn">
                                 <i class="fas fa-arrow-left"></i>
                             </button>
-                            <button class="settings-btn" id="settingsBtn">
-                                <i class="fas fa-cog"></i>
-                            </button>
                         </div>
                         <div class="ha-content">
                             <iframe 
@@ -105,20 +137,89 @@
 
                 <!-- Card 4: Weather Forecast -->
                 <div class="carousel-card" id="forecastCard">
-                    <div class="forecast-container">
-                        <div class="forecast-header">
+                    <div class="wx-photo-bg" id="wxPhotoBg">
+                        <img class="wx-photo-img" id="wxPhotoSlot0" src="" alt="">
+                        <img class="wx-photo-img wx-photo-hidden" id="wxPhotoSlot1" src="" alt="">
+                        <div class="wx-photo-overlay"></div>
+                    </div>
+                    <div class="wx-canvas">
+                        <div class="wx-header">
                             <i class="fas fa-cloud-sun"></i>
-                            <span>5-Day Forecast</span>
-                            <div class="header-time-display"></div>
-                            <button class="ha-back-btn" id="forecastBackBtn">
-                                <i class="fas fa-arrow-left"></i>
-                            </button>
-                            <button class="settings-btn" id="forecastSettingsBtn">
-                                <i class="fas fa-cog"></i>
+                            <span class="wx-header-title">Weather</span>
+                            <span class="header-time-display wx-header-time"></span>
+                            <button class="ha-back-btn" id="forecastBackBtn" title="Home">
+                                <i class="fas fa-home"></i>
                             </button>
                         </div>
-                        <div class="forecast-content" id="forecastContent">
-                            <div class="loading">Loading forecast...</div>
+                        <div class="wx-return-bar"><div class="wx-return-progress" id="wxReturnProgress"></div></div>
+                        <div class="wx-hero">
+                            <div class="wx-hero-left">
+                                <div class="wx-hero-temp" id="wxHeroTemp">--°</div>
+                                <div class="wx-hero-cond" id="wxHeroCond">--</div>
+                                <div class="wx-hero-feels" id="wxHeroFeels"></div>
+                            </div>
+                            <div class="wx-hero-right">
+                                <div class="wx-stat-grid">
+                                    <div class="wx-stat">
+                                        <div class="wx-stat-lbl"><i class="fas fa-wind"></i> Wind</div>
+                                        <div class="wx-stat-val" id="wxStatWind">--</div>
+                                    </div>
+                                    <div class="wx-stat">
+                                        <div class="wx-stat-lbl"><i class="fas fa-tint"></i> Humidity</div>
+                                        <div class="wx-stat-val" id="wxStatHumidity">--</div>
+                                    </div>
+                                    <div class="wx-stat">
+                                        <div class="wx-stat-lbl"><i class="fas fa-sun"></i> UV Index</div>
+                                        <div class="wx-stat-val" id="wxStatUV">--</div>
+                                    </div>
+                                    <div class="wx-stat">
+                                        <div class="wx-stat-lbl"><i class="fas fa-cloud-rain"></i> Precip</div>
+                                        <div class="wx-stat-val" id="wxStatPrecip">--</div>
+                                    </div>
+                                </div>
+                                <button class="wx-radar-shortcut" onclick="smartDisplay.openRadar()">
+                                    <i class="fas fa-satellite-dish"></i>
+                                    <span>RADAR</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Normal forecast view -->
+                        <div id="wxNormal">
+                            <div class="wx-section-hdr wx-hdr-primary">Hourly Forecast</div>
+                            <div class="wx-hourly-strip" id="wxHourlyStrip">
+                                <div class="loading">Loading...</div>
+                            </div>
+                            <div class="wx-section-hdr wx-hdr-secondary">Daily Forecast</div>
+                            <div class="wx-daily-strip" id="wxDailyStrip">
+                                <div class="loading">Loading...</div>
+                            </div>
+                        </div>
+                        <!-- Day detail panel — populated and shown when a day is tapped -->
+                        <div id="wxDayDetail" class="wx-day-detail">
+                            <div class="wx-dd-hdr">
+                                <button class="wx-dd-back" id="wxDdBack"><i class="fas fa-arrow-left"></i></button>
+                                <span class="wx-dd-title" id="wxDdTitle"></span>
+                                <span class="wx-dd-range" id="wxDdRange"></span>
+                            </div>
+                            <div class="wx-dh-strip" id="wxDhStrip"></div>
+                        </div>
+                        <!-- Radar overlay — fullscreen over the weather card -->
+                        <div id="wxRadarOverlay" class="wx-radar-overlay">
+                            <div class="wx-radar-hdr">
+                                <button class="wx-dd-back wx-radar-back"><i class="fas fa-arrow-left"></i></button>
+                                <span class="wx-radar-title">Radar · Your City, ST</span>
+                                <span class="wx-radar-ts" id="wxRadarTs">—</span>
+                                <button class="ha-back-btn" title="Home"><i class="fas fa-home"></i></button>
+                            </div>
+                            <div class="wx-radar-map-wrap">
+                                <div id="wxRadarMap"></div>
+                            </div>
+                            <div class="wx-radar-controls">
+                                <button class="wx-radar-play-btn" id="wxRadarPlayBtn" onclick="smartDisplay.toggleRadarPlay()">
+                                    <i class="fas fa-pause" id="wxRadarPlayIcon"></i>
+                                </button>
+                                <div class="wx-radar-frame-bar" id="wxRadarFrameBar"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -132,9 +233,6 @@
                             <div class="header-time-display"></div>
                             <button class="ha-back-btn" id="agendaBackBtn">
                                 <i class="fas fa-arrow-left"></i>
-                            </button>
-                            <button class="settings-btn" id="agendaSettingsBtn">
-                                <i class="fas fa-cog"></i>
                             </button>
                         </div>
                         <div class="agenda-content" id="agendaContent">

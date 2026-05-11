@@ -21,4 +21,5 @@ exec /usr/lib/chromium/chromium \
     --autoplay-policy=no-user-gesture-required \
     --check-for-update-interval=31536000 \
     --ozone-platform=wayland \
+    --disk-cache-size=0 \
     http://localhost:3000

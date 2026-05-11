@@ -31,6 +31,18 @@ class SmartDisplay {
         this.calendarAutoReturnTimer = null;
         this.CALENDAR_AUTO_RETURN_MS = 60000; // 60 s inactivity → back to Day(today) then Card 0
 
+        // Radar state
+        this._radarReady          = false;
+        this._radarMap            = null;
+        this._radarHost           = 'https://tilecache.rainviewer.com';
+        this._radarFrames         = [];
+        this._radarLayers         = [];
+        this._radarIdx            = 0;
+        this._radarPlaying        = true;
+        this._radarTimer          = null;
+        this._radarRefreshTimer   = null;
+        this._radarLastFetch      = 0;
+
         this.init();
     }
 
@@ -43,15 +55,22 @@ class SmartDisplay {
             leftTouchArea: document.getElementById('leftTouchArea'),
             rightTouchArea: document.getElementById('rightTouchArea'),
             photoSlideshow: document.getElementById('photoSlideshow'),
+            photoInfoOverlay: document.getElementById('photoInfoOverlay'),
+            photoInfoTitle:   document.getElementById('photoInfoTitle'),
+            photoInfoPath:    document.getElementById('photoInfoPath'),
             timeDisplay: document.querySelector('.time'),
             dateDisplay: document.querySelector('.date'),
             weatherDisplay: document.getElementById('weatherDisplay'),
             temperature: document.querySelector('.temperature'),
             condition: document.querySelector('.condition'),
             weatherIcon: document.querySelector('.weather-icon i'),
-            forecastContent: document.getElementById('forecastContent'),
+            wxHourlyStrip: document.getElementById('wxHourlyStrip'),
+            wxDailyStrip: document.getElementById('wxDailyStrip'),
             agendaContent: document.getElementById('agendaContent'),
             summaryContent: document.getElementById('summaryContent'),
+            groceryList: document.getElementById('groceryList'),
+            costcoList: document.getElementById('costcoList'),
+            tasksList: document.getElementById('tasksList'),
             homeAssistantFrame: document.getElementById('homeAssistantFrame'),
             settingsModal: document.getElementById('settingsModal')
         };
@@ -80,7 +99,9 @@ class SmartDisplay {
         this.loadCalendarEvents();
         this.loadWeather();
         this.loadPhotos();
-        
+        this.loadLists();
+        this.loadTasks();
+
         // Optimize intervals based on power mode
         const intervals = this.isLowPowerMode ? {
             time: 2000,           // 2 seconds instead of 1
@@ -119,6 +140,8 @@ class SmartDisplay {
         // Refresh forecast and agenda less frequently
         setInterval(() => this.loadForecast(), intervals.forecast);
         setInterval(() => this.loadAgenda(), intervals.agenda);
+        setInterval(() => this.loadLists(), 60 * 1000);
+        setInterval(() => this.loadTasks(), 5 * 60 * 1000);
         
         // Check for hourly summary less frequently
         this.checkHourlySummary();
@@ -144,6 +167,28 @@ class SmartDisplay {
         // Touch areas for swipe gestures
         this.domCache.leftTouchArea.addEventListener('click', () => this.previousCard());
         this.domCache.rightTouchArea.addEventListener('click', () => this.nextCard());
+
+        // Wake-flash: panel TCON takes seconds to settle after backlight wake,
+        // producing pale vertical banding. A full-screen white flash on the
+        // wake-touch drives all source drivers to max simultaneously, which
+        // both masks the artifact and tends to help the bias loop converge.
+        const WAKE_IDLE_MS = 20000;
+        const WAKE_FLASH_MS = 220;
+        let lastInteractionAt = Date.now();
+        const triggerWakeFlash = () => {
+            const flash = document.createElement('div');
+            flash.style.cssText =
+                'position:fixed;inset:0;background:#fff;z-index:2147483647;pointer-events:none;';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), WAKE_FLASH_MS);
+        };
+        const onPotentialWake = () => {
+            const now = Date.now();
+            if (now - lastInteractionAt > WAKE_IDLE_MS) triggerWakeFlash();
+            lastInteractionAt = now;
+        };
+        document.addEventListener('touchstart', onPotentialWake, { capture: true, passive: true });
+        document.addEventListener('mousedown', onPotentialWake, true);
 
         // Touch/swipe gestures with throttling
         let startX = 0;
@@ -240,6 +285,12 @@ class SmartDisplay {
             if (e.target.closest('.ha-back-btn')) {
                 this.goToCard(0);
             }
+            if (e.target.closest('.wx-dd-back')) {
+                this.closeWxDayDetail();
+            }
+            if (e.target.closest('.wx-radar-back')) {
+                this.closeRadar();
+            }
         });
 
         // Keyboard navigation
@@ -291,6 +342,16 @@ class SmartDisplay {
 
     goToCard(index) {
         if (index === this.currentCard) return;
+
+        // Navigating away from Card 3 — cancel weather auto-return, close day detail + radar
+        if (this.currentCard === 3) {
+            this.clearWeatherAutoReturn();
+            const normal = document.getElementById('wxNormal');
+            const detail = document.getElementById('wxDayDetail');
+            if (normal) normal.style.display = '';
+            if (detail) detail.classList.remove('visible');
+            this.closeRadar();
+        }
 
         // Navigating away from Card 4 — reset calendar to default (Day/today) for next entry
         if (this.currentCard === 4) {
@@ -346,13 +407,18 @@ class SmartDisplay {
             this.domCache.leftTouchArea.style.pointerEvents = 'none';
             this.domCache.rightTouchArea.style.pointerEvents = 'none';
             this.loadForecast();
+            if (!this._wxPhotosInitialized) {
+                this._wxPhotosInitialized = true;
+                this.setupWeatherBackground();
+            }
+            this.startWeatherAutoReturn();
         } else if (index === 4) {
             // Calendar card — enter Day view (today) by default
             this.domCache.calendarCard.style.display = 'none';
             this.domCache.leftTouchArea.style.pointerEvents = 'none';
             this.domCache.rightTouchArea.style.pointerEvents = 'none';
             // Small delay lets the carousel CSS transition start before we flip the view
-            setTimeout(() => this.showCalendarView('day'), 50);
+            setTimeout(() => this.showCalendarView('week'), 50);
         }
     }
 
@@ -436,27 +502,8 @@ class SmartDisplay {
         tempElement.textContent = `${Math.round(weatherData.current.temperature_2m)}°F`;
         conditionElement.textContent = this.getWeatherDescription(weatherData.current.weather_code);
 
-        // Update weather icon based on condition
         const iconClass = this.getWeatherIcon(weatherData.current.weather_code);
         iconElement.className = `fas ${iconClass}`;
-
-        // Add additional weather details if available
-        if (weatherData.current.relative_humidity_2m) {
-            const humidity = Math.round(weatherData.current.relative_humidity_2m);
-            conditionElement.textContent += ` • ${humidity}% humidity`;
-        }
-        
-        if (weatherData.current.wind_speed_10m) {
-            const windSpeed = Math.round(weatherData.current.wind_speed_10m);
-            const windDirection = this.getWindDirection(weatherData.current.wind_direction_10m);
-            const windArrow = this.getWindArrow(weatherData.current.wind_direction_10m);
-            conditionElement.innerHTML += ` • ${windArrow} ${windSpeed} mph ${windDirection}`;
-        }
-        
-        if (weatherData.current.wind_gusts_10m) {
-            const windGust = Math.round(weatherData.current.wind_gusts_10m);
-            conditionElement.textContent += ` • gusts to ${windGust} mph`;
-        }
     }
 
     getWeatherIcon(code) {
@@ -540,6 +587,87 @@ class SmartDisplay {
                 this.updateCalendarDisplay([]);
             }
         }
+    }
+
+    async loadLists() {
+        try {
+            const res = await fetch('/api/lists');
+            if (!res.ok) {
+                // Sidecar down or not yet authed — leave existing content alone
+                if (res.status === 503) this._renderListsUnavailable();
+                return;
+            }
+            const data = await res.json();
+            this.renderListCol(this.domCache.groceryList, data.grocery?.listId || null, data.grocery?.items || []);
+            this.renderListCol(this.domCache.costcoList,  data.costco?.listId  || null, data.costco?.items  || []);
+        } catch (e) {
+            console.error('Error loading lists:', e);
+        }
+    }
+
+    _renderListsUnavailable() {
+        const msg = '<div class="tasks-empty">Keep service offline</div>';
+        if (this.domCache.groceryList) this.domCache.groceryList.innerHTML = msg;
+        if (this.domCache.costcoList)  this.domCache.costcoList.innerHTML  = msg;
+    }
+
+    async loadTasks() {
+        try {
+            const res = await fetch('/api/tasks');
+            if (!res.ok) {
+                if (this.domCache.tasksList)
+                    this.domCache.tasksList.innerHTML = '<div class="tasks-empty">Tasks unavailable</div>';
+                return;
+            }
+            const data = await res.json();
+            this.renderTasksList(data.items || []);
+        } catch (e) {
+            console.error('Error loading tasks:', e);
+        }
+    }
+
+    renderTasksList(items) {
+        const el = this.domCache.tasksList;
+        if (!el) return;
+        if (!items.length) {
+            el.innerHTML = '<div class="tasks-empty">All caught up</div>';
+            return;
+        }
+        const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        el.innerHTML = items.map(it =>
+            `<div class="task-item task-item--readonly">` +
+            `<span class="task-check"></span>` +
+            `<span class="task-label">${esc(it.title)}</span>` +
+            `</div>`
+        ).join('');
+    }
+
+    renderListCol(el, listId, items) {
+        if (!el) return;
+        if (!items.length) {
+            el.innerHTML = '<div class="tasks-empty">Use OK Google to add an item</div>';
+            return;
+        }
+        const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        el.innerHTML = items.map(it =>
+            `<div class="task-item" data-item-id="${it.id}" data-list-id="${listId}">` +
+            `<span class="task-check"></span>` +
+            `<span class="task-label">${esc(it.text)}</span>` +
+            `</div>`
+        ).join('');
+        el.querySelectorAll('.task-item').forEach(item => {
+            item.addEventListener('click', () =>
+                this.checkItem(item.dataset.listId, item.dataset.itemId, item)
+            );
+        });
+    }
+
+    checkItem(listId, itemId, el) {
+        el.classList.add('done');
+        setTimeout(() => el.remove(), 400);
+        fetch(`/api/lists/${encodeURIComponent(listId)}/items/${encodeURIComponent(itemId)}/check`, {
+            method: 'POST',
+        }).catch(e => console.error('Failed to check item:', e));
     }
 
     updateCalendarDisplay(events) {
@@ -743,8 +871,8 @@ class SmartDisplay {
 
         const slideshowContainer = this.domCache.photoSlideshow;
 
-        // Preserve the ambient calendar shortcut button — innerHTML = '' would destroy it
-        const ambientBtn = document.getElementById('calAmbientShortcutBtn');
+        // Preserve the ambient shortcuts container — innerHTML = '' would destroy it
+        const ambientShortcuts = slideshowContainer.querySelector('.ambient-shortcuts');
         slideshowContainer.innerHTML = '';
 
         // Create photo slides with optimized loading
@@ -771,8 +899,8 @@ class SmartDisplay {
             slideshowContainer.appendChild(slide);
         });
 
-        // Re-append the calendar shortcut button after slides are rebuilt
-        if (ambientBtn) slideshowContainer.appendChild(ambientBtn);
+        // Re-append the shortcuts container after slides are rebuilt
+        if (ambientShortcuts) slideshowContainer.appendChild(ambientShortcuts);
 
         // Start slideshow with longer interval for better performance
         const slideInterval = this.isLowPowerMode ? 120000 : 60000; // 2 minutes vs 1 minute
@@ -786,9 +914,32 @@ class SmartDisplay {
 
         const slides = document.querySelectorAll('.photo-slide');
         slides[this.currentPhotoIndex].classList.remove('active');
-        
+
         this.currentPhotoIndex = (this.currentPhotoIndex + 1) % this.photos.length;
         slides[this.currentPhotoIndex].classList.add('active');
+    }
+
+    showPhotoInfo() {
+        const photo = this.photos[this.currentPhotoIndex];
+        if (!photo || !this.domCache.photoInfoOverlay) return;
+
+        this.domCache.photoInfoTitle.textContent = photo.filename || 'Unknown';
+
+        const parts = ['Photos'];
+        if (photo.year)  parts.push(photo.year);
+        if (photo.album) parts.push(photo.album);
+        this.domCache.photoInfoPath.textContent = parts.join(' › ');
+
+        this.domCache.photoInfoOverlay.classList.add('visible');
+
+        clearTimeout(this._photoInfoTimer);
+        this._photoInfoTimer = setTimeout(() => this.hidePhotoInfo(), 12000);
+    }
+
+    hidePhotoInfo() {
+        clearTimeout(this._photoInfoTimer);
+        if (this.domCache.photoInfoOverlay)
+            this.domCache.photoInfoOverlay.classList.remove('visible');
     }
 
     openSettings() {
@@ -865,6 +1016,7 @@ class SmartDisplay {
                 return;
             }
 
+            this._weatherData = weatherData;
             this.updateForecastDisplay(weatherData);
         } catch (error) {
             console.error('Error loading forecast:', error);
@@ -872,68 +1024,68 @@ class SmartDisplay {
     }
 
     updateForecastDisplay(weatherData) {
-        const forecastContent = this.domCache.forecastContent;
-        
-        if (!weatherData.daily) {
-            forecastContent.innerHTML = '<div class="loading">No forecast data available</div>';
-            return;
+        if (!weatherData.current || !weatherData.daily) return;
+
+        const cur = weatherData.current;
+
+        // Hero: current temp, condition, feels like
+        document.getElementById('wxHeroTemp').textContent = `${Math.round(cur.temperature_2m)}°`;
+        document.getElementById('wxHeroCond').textContent = this.getWeatherDescription(cur.weather_code);
+        if (cur.apparent_temperature != null) {
+            document.getElementById('wxHeroFeels').textContent = `Feels like ${Math.round(cur.apparent_temperature)}°`;
         }
 
-        const forecastHtml = weatherData.daily.time.slice(0, 5).map((date, index) => {
-            let displayDate;
-            if (index === 0) {
-                displayDate = new Date();
-            } else {
-                displayDate = new Date();
-                displayDate.setDate(displayDate.getDate() + index);
-            }
-            
-            const dayName = displayDate.toLocaleDateString('en-US', { weekday: 'short' });
-            const dayDate = displayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            const weatherCode = weatherData.daily.weather_code[index] || 0;
-            const maxTemp = Math.round(weatherData.daily.temperature_2m_max[index]);
-            const minTemp = Math.round(weatherData.daily.temperature_2m_min[index]);
-            
-            const precipChance = weatherData.daily.precipitation_probability_max ? weatherData.daily.precipitation_probability_max[index] : 0;
-            const windSpeed = weatherData.daily.wind_speed_10m_max ? Math.round(weatherData.daily.wind_speed_10m_max[index]) : 0;
-            const windGust = weatherData.daily.wind_gusts_10m_max ? Math.round(weatherData.daily.wind_gusts_10m_max[index]) : 0;
-            const iconClass = this.getWeatherIcon(weatherCode) || 'fa-cloud weather-cloudy';
+        // Stat cards
+        const windDir = this.getWindDirection(cur.wind_direction_10m);
+        document.getElementById('wxStatWind').innerHTML = `${Math.round(cur.wind_speed_10m)} <sub>mph ${windDir}</sub>`;
+        document.getElementById('wxStatHumidity').innerHTML = `${Math.round(cur.relative_humidity_2m)}<sub>%</sub>`;
+        document.getElementById('wxStatUV').textContent = Math.round(cur.uv_index) ?? '--';
 
-            const uvIndex = weatherData.daily.uv_index_max ? weatherData.daily.uv_index_max[index] : 'N/A';
-            const uvClass = this.getUVClass(uvIndex);
-            
+        // Precip from current hour in hourly data
+        const now = new Date();
+        const nowHourStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}`;
+        const hourlyTimes = weatherData.hourly?.time || [];
+        let curHourIdx = hourlyTimes.findIndex(t => t.startsWith(nowHourStr));
+        if (curHourIdx < 0) curHourIdx = 0;
+        const precip = weatherData.hourly?.precipitation_probability?.[curHourIdx] ?? '--';
+        document.getElementById('wxStatPrecip').innerHTML = `${precip}<sub>%</sub>`;
+
+        // Hourly strip — 8 slots starting from current hour
+        const hourlyHtml = [];
+        for (let i = 0; i < 8; i++) {
+            const idx = curHourIdx + i;
+            if (idx >= hourlyTimes.length) break;
+            const timeLabel = i === 0
+                ? 'Now'
+                : new Date(hourlyTimes[idx]).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+            const temp = Math.round(weatherData.hourly.temperature_2m[idx]);
+            const iconClass = this.getWeatherIcon(weatherData.hourly.weather_code[idx]) || 'fa-cloud';
+            hourlyHtml.push(`
+                <div class="wx-h-item${i === 0 ? ' now' : ''}">
+                    <div class="wx-h-time">${timeLabel}</div>
+                    <div class="wx-h-icon"><i class="fas ${iconClass}"></i></div>
+                    <div class="wx-h-temp">${temp}°</div>
+                </div>`);
+        }
+        this.domCache.wxHourlyStrip.innerHTML = hourlyHtml.join('');
+
+        // Daily strip — 7 days (tappable → day detail)
+        const dailyHtml = weatherData.daily.time.slice(0, 7).map((_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() + i);
+            const dow = date.toLocaleDateString('en-US', { weekday: 'short' });
+            const maxTemp = Math.round(weatherData.daily.temperature_2m_max[i]);
+            const minTemp = Math.round(weatherData.daily.temperature_2m_min[i]);
+            const iconClass = this.getWeatherIcon(weatherData.daily.weather_code[i]) || 'fa-cloud';
             return `
-                <div class="forecast-day" onclick="smartDisplay.openHourlyForecast(${index})" style="cursor: pointer;">
-                    <div>
-                        <div class="forecast-day-name">${dayName}</div>
-                        <div class="forecast-day-date">${dayDate}</div>
-                        <div class="forecast-icon">
-                            <i class="fas ${iconClass}"></i>
-                        </div>
-                        <div class="forecast-temps">
-                            <div class="forecast-high">${maxTemp}°F</div>
-                            <div class="forecast-low">${minTemp}°F</div>
-                        </div>
-                    </div>
-                    <div class="forecast-details">
-                        <div class="forecast-detail-item">
-                            <span class="forecast-detail-label">Rain:</span> ${precipChance}%
-                        </div>
-                        <div class="forecast-detail-item">
-                            <span class="forecast-detail-label">Wind:</span> ${this.getWindArrow(weatherData.hourly.wind_direction_10m ? weatherData.hourly.wind_direction_10m[index * 12] : 0)} ${windSpeed} mph
-                        </div>
-                        <div class="forecast-detail-item">
-                            <span class="forecast-detail-label">Gusts:</span> ${windGust} mph
-                        </div>
-                        <div class="forecast-detail-item">
-                            <span class="forecast-detail-label">UV:</span> <span class="${uvClass}">${uvIndex}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
+                <div class="wx-d-item" ontouchend="smartDisplay.showWxDayDetail(${i})" onclick="smartDisplay.showWxDayDetail(${i})">
+                    <div class="wx-d-dow">${dow}</div>
+                    <div class="wx-d-icon"><i class="fas ${iconClass}"></i></div>
+                    <div class="wx-d-high">${maxTemp}°</div>
+                    <div class="wx-d-low">${minTemp}°</div>
+                </div>`;
         }).join('');
-
-        forecastContent.innerHTML = forecastHtml;
+        this.domCache.wxDailyStrip.innerHTML = dailyHtml;
     }
 
     async loadAgenda(retryCount = 0) {
@@ -1080,29 +1232,12 @@ class SmartDisplay {
     }
 
     checkHourlySummary() {
-        if (!this.settings.summaryEnabled) return;
-        
-        const now = new Date();
-        const currentHour = now.getHours();
-        
-        // Reset summaryShown flag every hour to allow showing summary again
-        if (this.lastSummaryHour !== currentHour) {
-            this.summaryShown = false;
-            this.lastSummaryHour = currentHour;
-            console.log('Hourly summary reset for new hour:', currentHour);
-        }
-        
-        // Check if it's time to show the summary (every hour on the hour)
-        if (now.getMinutes() === 0 && !this.summaryShown) {
-            console.log('Auto-swiping to hourly summary at:', currentHour + ':00');
-            this.showDailySummary();
-        }
+        // Auto-navigation to the summary card has been removed.
+        // The summary is only shown when the user explicitly taps the button.
     }
 
     showDailySummary() {
-        this.summaryShown = true;
-        this.goToCard(1); // Go to Daily Summary card
-        this.loadSummary(true); // Force refresh for hourly updates
+        // No-op — kept for safety in case any other caller references it.
     }
 
     async loadSummary(forceRefresh = false) {
@@ -1156,9 +1291,9 @@ class SmartDisplay {
         const summaryContent = this.domCache.summaryContent;
         
         // Format the summary with highlights
-        let formattedSummary = data.summary;
-        
-        // Add highlighting for events, weather, and tasks
+        let formattedSummary = data.summary || data.error || 'Summary unavailable — try again later.';
+
+        // Add highlighting for events and weather
         formattedSummary = formattedSummary
             .replace(/\*\*(.*?)\*\*/g, '<span class="highlight">$1</span>')
             .replace(/(\d{1,2}:\d{2}\s*(?:AM|PM).*?)/g, '<span class="event-highlight">$1</span>')
@@ -1168,8 +1303,8 @@ class SmartDisplay {
             .replace(/(temperature of \d+\.?\d*°F)/gi, '<span class="weather-highlight">$1</span>')
             .replace(/(\d+°F|sunny|cloudy|rainy|snow)/gi, '<span class="weather-highlight">$1</span>')
             .replace(/\n/g, '<br>');
-        
-        summaryContent.innerHTML = formattedSummary;
+
+        summaryContent.innerHTML = `<p>${formattedSummary}</p>`;
     }
 
     refreshPage() {
@@ -1385,9 +1520,12 @@ class SmartDisplay {
             // Hide title span — replaced by the view toggle
             const titleEl = agendaHeader.querySelector('.agenda-title, h2, span:not(.ha-back-btn)');
             if (titleEl) titleEl.style.display = 'none';
-            // Hide agenda back btn — not needed at Card 4 top level
+            // Replace agenda back btn with a home icon
             const agendaBackBtn = document.getElementById('agendaBackBtn');
-            if (agendaBackBtn) agendaBackBtn.style.display = 'none';
+            if (agendaBackBtn) {
+                agendaBackBtn.innerHTML = '<i class="fas fa-home"></i>';
+                agendaBackBtn.style.display = '';
+            }
 
             // Build Day|Week|Month segmented toggle
             const toggle = document.createElement('div');
@@ -1398,14 +1536,8 @@ class SmartDisplay {
                 <button class="cal-toggle-btn" data-view="week">Week</button>
                 <button class="cal-toggle-btn" data-view="month">Month</button>`;
 
-            // Pin toggle to right side, before ⚙ settings button
             toggle.style.marginLeft = 'auto';
-            const settingsBtn = agendaHeader.querySelector('.settings-btn');
-            if (settingsBtn) {
-                agendaHeader.insertBefore(toggle, settingsBtn);
-            } else {
-                agendaHeader.appendChild(toggle);
-            }
+            agendaHeader.appendChild(toggle);
 
             // Delegate clicks on the toggle
             toggle.addEventListener('click', (e) => {
@@ -1482,22 +1614,44 @@ class SmartDisplay {
             </div>`;
         agendaContent.insertAdjacentElement('beforebegin', dayView);
 
-        // ── Ambient card (Card 0) shortcut button ─────────────────────────────
+        // ── Ambient card (Card 0) shortcut buttons ────────────────────────────
         const photoSlideshow = this.domCache.photoSlideshow;
         if (photoSlideshow) {
-            const ambientBtn = document.createElement('button');
-            ambientBtn.id        = 'calAmbientShortcutBtn';
-            ambientBtn.className = 'cal-ambient-shortcut-btn';
-            ambientBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                 stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8"  y1="2" x2="8"  y2="6"/>
-                <line x1="3"  y1="10" x2="21" y2="10"/>
-            </svg>Calendar`;
-            ambientBtn.addEventListener('click', () => this.goToCard(4));
-            photoSlideshow.appendChild(ambientBtn);
+            const shortcuts = document.createElement('div');
+            shortcuts.className = 'ambient-shortcuts';
+
+            // Wire the static Weather button (lives next to the weather pill in index.html)
+            const weatherShortcutBtn = document.getElementById('weatherShortcutBtn');
+            if (weatherShortcutBtn) {
+                weatherShortcutBtn.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+                weatherShortcutBtn.addEventListener('touchend',   e => e.stopPropagation(), { passive: true });
+            }
+
+            const btns = [
+                { label: 'Calendar',     icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`, card: 4 },
+                { label: 'Summary',      icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`, card: 1 },
+                { label: 'This Picture', icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`, action: () => this.showPhotoInfo() },
+            ];
+
+            btns.forEach(({ label, icon, card, action }) => {
+                const btn = document.createElement('button');
+                const idMap = { 'Calendar': 'calAmbientShortcutBtn', 'Summary': 'summaryAmbientShortcutBtn', 'This Picture': 'thisPictureShortcutBtn' };
+                btn.id        = idMap[label] || '';
+                btn.className = 'cal-ambient-shortcut-btn';
+                btn.innerHTML = `${icon}${label}`;
+                btn.addEventListener('click', action || (() => this.goToCard(card)));
+                btn.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+                btn.addEventListener('touchend',   e => e.stopPropagation(), { passive: true });
+                shortcuts.appendChild(btn);
+            });
+
+            document.getElementById('photoInfoDismiss')?.addEventListener('click', e => {
+                e.stopPropagation();
+                this.hidePhotoInfo();
+            });
+            document.getElementById('photoInfoOverlay')?.addEventListener('click', () => this.hidePhotoInfo());
+
+            photoSlideshow.appendChild(shortcuts);
         }
 
         // ── Month nav listeners ───────────────────────────────────────────────
@@ -1587,6 +1741,7 @@ class SmartDisplay {
             .then(r => r.json())
             .then(data => {
                 const files = (data.files || []).slice();
+                console.log('[calBg] local-photos returned', files.length, 'files');
                 if (!files.length) return;
 
                 // Fisher-Yates shuffle for random order each session
@@ -1604,7 +1759,7 @@ class SmartDisplay {
 
                 this._calPhotoTimer = setInterval(() => this._calNextPhoto(), 30000);
             })
-            .catch(() => {}); // non-critical — calendar works fine without background photo
+            .catch(err => console.warn('[calBg] fetch failed:', err.message));
     }
 
     _calNextPhoto() {
@@ -1629,6 +1784,261 @@ class SmartDisplay {
         setTimeout(() => {
             prev.src = '/photos/' + encodeURIComponent(this._calPhotoFiles[preloadIdx]);
         }, 2000);
+    }
+
+    setupWeatherBackground() {
+        this._wxPhotoFiles  = [];
+        this._wxPhotoIndex  = 0;
+        this._wxActiveSlot  = 0;
+        this._wxPhotoTimer  = null;
+
+        fetch('/api/local-photos')
+            .then(r => r.json())
+            .then(data => {
+                const files = (data.files || []).slice();
+                console.log('[wxBg] local-photos returned', files.length, 'files');
+                if (!files.length) return;
+
+                for (let i = files.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [files[i], files[j]] = [files[j], files[i]];
+                }
+                this._wxPhotoFiles = files;
+
+                const slot0 = document.getElementById('wxPhotoSlot0');
+                const slot1 = document.getElementById('wxPhotoSlot1');
+                if (slot0) slot0.src = '/photos/' + encodeURIComponent(files[0]);
+                if (slot1 && files.length > 1) slot1.src = '/photos/' + encodeURIComponent(files[1]);
+                this._wxPhotoIndex = 1;
+
+                this._wxPhotoTimer = setInterval(() => this._wxNextPhoto(), 30000);
+            })
+            .catch(err => console.warn('[wxBg] fetch failed:', err.message));
+    }
+
+    _wxNextPhoto() {
+        if (!this._wxPhotoFiles.length) return;
+        const slot0 = document.getElementById('wxPhotoSlot0');
+        const slot1 = document.getElementById('wxPhotoSlot1');
+        if (!slot0 || !slot1) return;
+
+        const next = this._wxActiveSlot === 0 ? slot1 : slot0;
+        const prev = this._wxActiveSlot === 0 ? slot0 : slot1;
+
+        next.classList.remove('wx-photo-hidden');
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            prev.classList.add('wx-photo-hidden');
+        }));
+
+        this._wxActiveSlot = this._wxActiveSlot === 0 ? 1 : 0;
+        this._wxPhotoIndex = (this._wxPhotoIndex + 1) % this._wxPhotoFiles.length;
+
+        const preloadIdx = (this._wxPhotoIndex + 1) % this._wxPhotoFiles.length;
+        setTimeout(() => {
+            prev.src = '/photos/' + encodeURIComponent(this._wxPhotoFiles[preloadIdx]);
+        }, 2000);
+    }
+
+    showWxDayDetail(dayIndex) {
+        const data = this._weatherData;
+        if (!data?.hourly) return;
+
+        const date = new Date();
+        date.setDate(date.getDate() + dayIndex);
+        const dateLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        const targetStr = date.toISOString().split('T')[0];
+        const high = Math.round(data.daily.temperature_2m_max[dayIndex]);
+        const low  = Math.round(data.daily.temperature_2m_min[dayIndex]);
+
+        document.getElementById('wxDdTitle').textContent = dateLabel;
+        document.getElementById('wxDdRange').textContent = `High ${high}° · Low ${low}°`;
+
+        const strip = document.getElementById('wxDhStrip');
+        const items = [];
+        for (let i = 0; i < data.hourly.time.length; i++) {
+            if (!data.hourly.time[i].startsWith(targetStr)) continue;
+            const t = new Date(data.hourly.time[i]);
+            const label = t.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).replace(' ', '').toLowerCase();
+            const temp  = Math.round(data.hourly.temperature_2m[i]);
+            const rain  = data.hourly.precipitation_probability[i] ?? 0;
+            const icon  = this.getWeatherIcon(data.hourly.weather_code[i]) || 'fa-cloud';
+            items.push(`
+                <div class="wx-dh-item">
+                    <div class="wx-dh-time">${label}</div>
+                    <div class="wx-dh-icon"><i class="fas ${icon}"></i></div>
+                    <div class="wx-dh-temp">${temp}°</div>
+                    <div class="wx-dh-rain">${rain > 0 ? rain + '%' : ''}</div>
+                </div>`);
+        }
+        strip.innerHTML = items.join('');
+
+        document.getElementById('wxNormal').style.display = 'none';
+        document.getElementById('wxDayDetail').classList.add('visible');
+
+        // Scroll to current hour for today, or 8am for future days
+        const scrollToIdx = dayIndex === 0 ? new Date().getHours() : 8;
+        setTimeout(() => {
+            const target = strip.children[scrollToIdx];
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+        }, 50);
+
+        // Reset the weather auto-return timer
+        this.startWeatherAutoReturn();
+    }
+
+    closeWxDayDetail() {
+        const normal = document.getElementById('wxNormal');
+        const detail = document.getElementById('wxDayDetail');
+        if (normal) normal.style.display = '';
+        if (detail) detail.classList.remove('visible');
+        this.startWeatherAutoReturn();
+    }
+
+    // ── Radar overlay ────────────────────────────────────────────────────────
+    openRadar() {
+        const overlay = document.getElementById('wxRadarOverlay');
+        if (!overlay) return;
+        overlay.classList.add('visible');
+        this.startWeatherAutoReturn();
+
+        clearInterval(this._radarRefreshTimer);
+        this._radarRefreshTimer = setInterval(() => this._fetchRadarFrames(), 10 * 60 * 1000);
+
+        if (!this._radarReady) {
+            this._radarReady = true;
+            setTimeout(() => this._initRadarMap(), 60);
+        } else {
+            if (this._radarMap) this._radarMap.invalidateSize();
+            const stale = Date.now() - this._radarLastFetch > 10 * 60 * 1000;
+            if (stale) {
+                this._fetchRadarFrames();
+            } else {
+                this._startRadarAnim();
+            }
+        }
+    }
+
+    closeRadar() {
+        const overlay = document.getElementById('wxRadarOverlay');
+        if (overlay) overlay.classList.remove('visible');
+        this._stopRadarAnim();
+        clearInterval(this._radarRefreshTimer);
+        this._radarRefreshTimer = null;
+    }
+
+    _initRadarMap() {
+        this._radarMap = L.map('wxRadarMap', {
+            center: [YOUR_LATITUDE, YOUR_LONGITUDE],
+            zoom: 7,
+            zoomControl: false,
+            attributionControl: false,
+            scrollWheelZoom: false,
+        });
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd', maxZoom: 19,
+        }).addTo(this._radarMap);
+
+        L.marker([YOUR_LATITUDE, YOUR_LONGITUDE], {
+            icon: L.divIcon({
+                className: '',
+                html: '<span style="font-size:13px;line-height:1;color:#ffd700;text-shadow:0 0 5px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,1)">★</span>',
+                iconSize: [13, 13],
+                iconAnchor: [6, 7],
+            }),
+            interactive: false,
+        }).addTo(this._radarMap);
+
+        L.marker([45.5286, -91.9996], {
+            icon: L.divIcon({
+                className: '',
+                html: '<span style="font-size:13px;line-height:1;color:#a1d494;text-shadow:0 0 5px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,1)">★</span>',
+                iconSize: [13, 13],
+                iconAnchor: [6, 7],
+            }),
+            interactive: false,
+        }).addTo(this._radarMap);
+
+        this._fetchRadarFrames();
+    }
+
+    async _fetchRadarFrames() {
+        const tsEl = document.getElementById('wxRadarTs');
+        if (tsEl) tsEl.textContent = 'Loading…';
+        try {
+            // Remove stale layers before rebuilding
+            this._stopRadarAnim();
+            this._radarLayers.forEach(l => { try { this._radarMap.removeLayer(l); } catch(e) {} });
+            this._radarLayers = [];
+            this._radarFrames = [];
+
+            const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+            const data = await resp.json();
+            this._radarHost   = data.host;
+            this._radarFrames = (data.radar.past || []).slice(-12);
+            this._radarLastFetch = Date.now();
+
+            this._radarLayers = this._radarFrames.map(f => {
+                const layer = L.tileLayer(
+                    `${this._radarHost}${f.path}/256/{z}/{x}/{y}/4/1_1.png`,
+                    { opacity: 0, maxZoom: 14, zIndex: 200 }
+                );
+                layer.addTo(this._radarMap);
+                return layer;
+            });
+
+            const bar = document.getElementById('wxRadarFrameBar');
+            if (bar) {
+                bar.innerHTML = this._radarFrames.map((f, i) => {
+                    const lbl = new Date(f.time * 1000)
+                        .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                    return `<div class="wx-radar-tick" id="wxRTick${i}">
+                        <span class="wx-radar-tick-lbl">${lbl}</span>
+                        <div class="wx-radar-tick-bar"></div>
+                    </div>`;
+                }).join('');
+            }
+
+            this._radarIdx = 0;
+            this._showRadarFrame(0);
+            this._startRadarAnim();
+        } catch (e) {
+            const tsEl2 = document.getElementById('wxRadarTs');
+            if (tsEl2) tsEl2.textContent = 'Unavailable';
+            console.warn('[radar] fetch failed:', e.message);
+        }
+    }
+
+    _showRadarFrame(i) {
+        this._radarLayers.forEach((l, j) => l.setOpacity(j === i ? 0.65 : 0));
+        document.querySelectorAll('#wxRadarFrameBar .wx-radar-tick').forEach((t, j) => {
+            t.className = 'wx-radar-tick' + (j === i ? ' active' : j < i ? ' past' : '');
+        });
+        const tsEl = document.getElementById('wxRadarTs');
+        if (tsEl && this._radarFrames[i]) {
+            tsEl.textContent = new Date(this._radarFrames[i].time * 1000)
+                .toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+    }
+
+    _startRadarAnim() {
+        this._stopRadarAnim();
+        if (!this._radarPlaying || !this._radarFrames.length) return;
+        this._radarTimer = setInterval(() => {
+            this._radarIdx = (this._radarIdx + 1) % this._radarFrames.length;
+            this._showRadarFrame(this._radarIdx);
+        }, 650);
+    }
+
+    _stopRadarAnim() {
+        clearInterval(this._radarTimer);
+        this._radarTimer = null;
+    }
+
+    toggleRadarPlay() {
+        this._radarPlaying = !this._radarPlaying;
+        const icon = document.getElementById('wxRadarPlayIcon');
+        if (icon) icon.className = this._radarPlaying ? 'fas fa-pause' : 'fas fa-play';
+        this._radarPlaying ? this._startRadarAnim() : this._stopRadarAnim();
     }
 
     /** Inject all calendar CSS as a <style> tag — keeps index.html/styles.css untouched */
@@ -1683,17 +2093,25 @@ class SmartDisplay {
             .cal-nav-arrow { width: 36px; height: 30px; font-size: 15px; border-radius: 6px; }
             .cal-nav-btn.disabled, .cal-nav-btn:disabled { opacity: 0.18; pointer-events: none; }
 
-            /* ── Ambient shortcut button ────────────────────────────────────────── */
+            /* ── Ambient shortcut buttons ───────────────────────────────────────── */
+            .ambient-shortcuts {
+                position: absolute; bottom: 24px; right: 18px; z-index: 10;
+                display: flex; flex-direction: column; gap: 14px;
+            }
             .cal-ambient-shortcut-btn {
-                position: absolute; bottom: 18px; right: 18px; z-index: 10;
-                display: inline-flex; align-items: center; gap: 6px;
+                display: inline-flex; align-items: center; gap: 7px;
                 background: rgba(18,20,22,0.72); border: 1px solid rgba(184,200,219,0.3);
-                color: #b8c8db; border-radius: 8px; padding: 8px 16px;
-                font-size: 13px; font-weight: 700; letter-spacing: 0.05em;
+                color: #b8c8db; border-radius: 10px; padding: 7px 18px;
+                font-size: 20px; font-weight: 700; letter-spacing: 0.05em;
                 cursor: pointer; font-family: inherit; backdrop-filter: blur(12px);
                 transition: background 0.15s; -webkit-tap-highlight-color: transparent;
+                position: relative; min-width: 120px; justify-content: center;
             }
             .cal-ambient-shortcut-btn:active { background: rgba(46,62,77,0.85); }
+            #calAmbientShortcutBtn   { font-size: 25px; font-weight: 800; }
+            #summaryAmbientShortcutBtn { font-size: 15px; font-weight: 600; }
+            #thisPictureShortcutBtn  { font-size: 15px; font-weight: 600; flex-direction: column; white-space: normal; text-align: center; gap: 4px; min-width: 0; }
+            #weatherShortcutBtn      { min-width: 0; }
 
             /* ── View containers ────────────────────────────────────────────────── */
             .cal-month-view, .cal-week-view, .cal-day-view {
@@ -1751,8 +2169,9 @@ class SmartDisplay {
                 font-size: 22px; font-weight: 700; color: #e2e2e5;
                 letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 7px;
             }
-            .cal-featured-time { font-size: 13px; color: #c4c6cd; font-weight: 600; letter-spacing: 0.04em; }
+            .cal-featured-time { font-size: 13px; color: #c4c6cd; font-weight: 600; letter-spacing: 0.04em; margin-bottom: 3px; }
             .cal-featured-location { font-size: 11px; color: #9ca9b5; font-weight: 500; margin-top: 2px; }
+            .cal-sidebar-event-location { font-size: 11px; color: #9ca9b5; font-weight: 500; margin-top: 2px; }
 
             /* Pill event rows */
             .cal-event-pill {
@@ -1826,7 +2245,7 @@ class SmartDisplay {
                 text-transform: uppercase; letter-spacing: 0.08em;
             }
             .cal-week-event-time.allday { color: #a1d494; }
-            .cal-week-event-title { font-size: 10px; font-weight: 600; color: #e2e2e5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+            .cal-week-event-title { font-size: 15px; font-weight: 600; color: #e2e2e5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
             .cal-week-overflow { font-size: 8px; font-weight: 700; color: rgba(196,198,205,0.5); text-align: center; padding: 3px 0 2px 0; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.06em; }
 
             /* ════════════════════════════════════════════════════════════════════
@@ -1975,7 +2394,7 @@ class SmartDisplay {
 
     /**
      * Auto-return target: reset all state to today, hide views.
-     * Card 4 will re-enter Day(today) on next visit via goToCard(4) → showCalendarView('day').
+     * Card 4 will re-enter Week view on next visit via goToCard(4) → showCalendarView('week').
      */
     exitToDefaultView() {
         this.clearCalendarAutoReturn();
@@ -2162,7 +2581,7 @@ class SmartDisplay {
             const timeStr = isAD ? 'All day'
                 : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             const locHtml = ev.location
-                ? `<div class="cal-sidebar-event-time">📍 ${ev.location}</div>` : '';
+                ? `<div class="cal-sidebar-event-location">📍 ${ev.location}</div>` : '';
 
             html += `<div class="${cls}">
                 <div class="cal-sidebar-event-inner">
@@ -2237,19 +2656,29 @@ class SmartDisplay {
             html += '</div>';
         }
 
-        // ── Featured "Next Up" card — first timed event
+        // ── Featured "Next Up" card
+        // For today: pick the first event that hasn't ended yet (in-progress counts).
+        // For other days: always pick the first timed event.
+        const now = new Date();
+        let featIdx = 0;
+        if (isToday && timedEvts.length) {
+            const upcoming = timedEvts.findIndex(ev => new Date(ev.end.dateTime) > now);
+            if (upcoming !== -1) featIdx = upcoming;
+        }
+
         let remaining = [...timedEvts];
         if (timedEvts.length) {
-            const feat  = timedEvts[0];
-            remaining   = timedEvts.slice(1);
+            const feat  = timedEvts[featIdx];
+            remaining   = [...timedEvts.slice(0, featIdx), ...timedEvts.slice(featIdx + 1)];
             const isHol = /holiday/i.test(feat.summary || '');
             const s     = new Date(feat.start.dateTime);
             const e     = new Date(feat.end.dateTime);
             const ts    = s.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             const te    = e.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             const loc   = feat.location ? `<div class="cal-featured-location">📍 ${feat.location}</div>` : '';
+            const label = (isToday && new Date(feat.start.dateTime) <= now) ? 'In Progress' : 'Next Up';
             html += `<div class="cal-featured-card${isHol ? ' holiday' : ''}">
-                <div class="cal-featured-label">Next Up</div>
+                <div class="cal-featured-label">${label}</div>
                 <div class="cal-featured-title">${feat.summary || '(No title)'}</div>
                 <div class="cal-featured-time">${ts} — ${te}</div>${loc}
             </div>`;
@@ -2387,6 +2816,34 @@ class SmartDisplay {
     }
 
     // ── Auto-return timer ────────────────────────────────────────────────────
+
+    startWeatherAutoReturn() {
+        this.clearWeatherAutoReturn();
+        const bar = document.getElementById('wxReturnProgress');
+        if (bar) {
+            bar.style.transition = 'none';
+            bar.style.width = '100%';
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                bar.style.transition = `width ${this.CALENDAR_AUTO_RETURN_MS}ms linear`;
+                bar.style.width = '0%';
+            }));
+        }
+        this.weatherAutoReturnTimer = setTimeout(() => {
+            this.goToCard(0);
+        }, this.CALENDAR_AUTO_RETURN_MS);
+    }
+
+    clearWeatherAutoReturn() {
+        if (this.weatherAutoReturnTimer) {
+            clearTimeout(this.weatherAutoReturnTimer);
+            this.weatherAutoReturnTimer = null;
+        }
+        const bar = document.getElementById('wxReturnProgress');
+        if (bar) {
+            bar.style.transition = 'none';
+            bar.style.width = '100%';
+        }
+    }
 
     /**
      * Start (or restart) the inactivity timer. The progress bar animates from

@@ -6,6 +6,8 @@
   <title>Calendar Card Simulator — 1024×600 · Boreal</title>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     /*
      * ══════════════════════════════════════════════════════════════════════════
@@ -169,8 +171,8 @@
       position: absolute; bottom: 18px; right: 18px; z-index: 10;
       display: inline-flex; align-items: center; gap: 6px;
       background: rgba(18,20,22,0.72); border: 1px solid rgba(184,200,219,0.3);
-      color: #b8c8db; border-radius: 8px; padding: 8px 16px;
-      font-size: 13px; font-weight: 700; letter-spacing: 0.05em;
+      color: #b8c8db; border-radius: 8px; padding: 4px 14px;
+      font-size: 20px; font-weight: 700; letter-spacing: 0.05em;
       cursor: pointer; font-family: inherit; backdrop-filter: blur(12px);
       transition: background 0.15s; -webkit-tap-highlight-color: transparent;
     }
@@ -365,7 +367,7 @@
     }
     .cal-week-event-time.allday { color: #a1d494; }
     .cal-week-event-title {
-      font-size: 10px; font-weight: 600; color: #e2e2e5;
+      font-size: 15px; font-weight: 600; color: #e2e2e5;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
     }
     .cal-week-overflow {
@@ -502,6 +504,9 @@
     .cal-sidebar-event-time {
       font-size: 11px; color: #c4c6cd; font-weight: 500; margin-top: 2px;
     }
+    .cal-sidebar-event-location {
+      font-size: 11px; color: #9ca9b5; font-weight: 500; margin-top: 2px;
+    }
 
     /* Month view: large heading in sub-header */
     .cal-month-header .cal-period-title {
@@ -555,12 +560,12 @@
     .sim-ambient-events {
       position: absolute; top: 20px; right: 20px;
       width: 240px;
-      background: rgba(18,20,22,0.70); backdrop-filter: blur(20px);
+      background: rgba(18,20,22,0.30); backdrop-filter: blur(20px);
       border: 1px solid rgba(184,200,219,0.18); border-radius: 14px;
       padding: 14px 16px; display: flex; flex-direction: column; gap: 0;
     }
     .sim-ambient-events-title {
-      font-size: 9px; font-weight: 800; letter-spacing: 0.16em;
+      font-size: 11px; font-weight: 800; letter-spacing: 0.16em;
       text-transform: uppercase; color: rgba(184,200,219,0.5);
       margin-bottom: 10px;
     }
@@ -570,20 +575,42 @@
     }
     .sim-ambient-event:last-child { border-bottom: none; }
     .sim-ambient-evt-time {
-      font-size: 9px; font-weight: 700; color: #b8c8db;
+      font-size: 11px; font-weight: 700; color: #b8c8db;
       letter-spacing: 0.06em; white-space: nowrap; flex-shrink: 0;
     }
     .sim-ambient-evt-title {
-      font-size: 11px; font-weight: 500; color: #e2e2e5;
+      font-size: 13px; font-weight: 500; color: #e2e2e5;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    /* All-day event row: green accent, matches production .all-day-event treatment */
+    .sim-ambient-event.allday {
+      margin: 0 -16px; padding: 6px 16px;
+      border-left: 4px solid #a1d494;
+      background: rgba(161,212,148,0.08);
+      border-bottom: 1px solid rgba(67,71,76,0.3);
+      align-items: center; gap: 8px;
+    }
+    .sim-ambient-event.allday:last-child { border-bottom: none; }
+    .sim-ambient-event.allday .sim-ambient-evt-time { color: #a1d494; }
+    .sim-ambient-evt-badge {
+      font-size: 10px; font-weight: 800; color: #a1d494;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      background: rgba(161,212,148,0.15); border-radius: 4px;
+      padding: 1px 5px; flex-shrink: 0; margin-left: auto;
     }
     .sim-clock-large {
       font-size: 80px; font-weight: 200; letter-spacing: -0.04em;
       color: #e2e2e5; line-height: 1; text-shadow: 0 2px 24px rgba(0,0,0,0.5);
     }
     .sim-date-large {
-      font-size: 16px; font-weight: 400; color: rgba(226,226,229,0.75);
+      font-size: 32px; font-weight: 800; color: rgba(226,226,229,0.75);
       letter-spacing: 0.01em; margin-top: 4px; margin-bottom: 12px;
+    }
+    .sim-wx-pill-row {
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .sim-wx-pill-row .cal-ambient-shortcut-btn {
+      position: relative; bottom: auto; right: auto;
     }
     .sim-wx-pill {
       display: inline-flex; align-items: center; gap: 8px;
@@ -591,9 +618,9 @@
       border: 1px solid rgba(184,200,219,0.18); border-radius: 20px;
       padding: 6px 14px; align-self: flex-start;
     }
-    .sim-wx-temp { font-size: 15px; font-weight: 700; color: #e2e2e5; }
-    .sim-wx-cond { font-size: 12px; color: rgba(196,198,205,0.7); font-weight: 500; }
-    .sim-wx-icon { font-size: 16px; }
+    .sim-wx-temp { font-size: 30px; font-weight: 800; color: #e2e2e5; }
+    .sim-wx-cond { font-size: 20px; color: rgba(196,198,205,0.7); font-weight: 800; }
+    .sim-wx-icon { font-size: 20px; }
 
     /* ── Cards 1-3: Boreal dark surface cards ────────────────────────────── */
     .sim-boreal-surface {
@@ -607,7 +634,7 @@
       background: rgba(12,14,16,0.7); backdrop-filter: blur(24px);
       border-bottom: 1px solid rgba(67,71,76,0.35); flex-shrink: 0;
     }
-    .sim-boreal-header i { color: #b8c8db; font-size: 16px; opacity: 0.75; }
+    .sim-boreal-header > i { color: #b8c8db; font-size: 16px; opacity: 0.75; }
     .sim-boreal-header-title {
       font-size: 15px; font-weight: 800; color: #e2e2e5;
       letter-spacing: -0.02em; flex: 1;
@@ -617,9 +644,11 @@
       letter-spacing: 0.1em; text-transform: uppercase;
     }
     .sim-boreal-back {
-      background: none; border: none; color: rgba(196,198,205,0.45);
-      font-size: 15px; cursor: pointer; padding: 8px; border-radius: 6px;
+      background: none; border: none; color: #b8c8db;
+      font-size: 18px; cursor: pointer; padding: 8px; border-radius: 8px;
+      transition: background 0.15s, color 0.15s;
     }
+    .sim-boreal-back:hover { background: rgba(184,200,219,0.1); color: #e2e2e5; }
 
     /* ── Card 1: Summary ─────────────────────────────────────────────────── */
     .sim-summary-body {
@@ -738,6 +767,92 @@
     }
     .sim-fc-detail-row span { color: rgba(196,198,205,0.65); }
 
+    /* ── Card 0: tasks panel (upper-left, two columns) ─────────────────── */
+    .sim-ambient-tasks {
+      position: absolute; top: 20px; left: 20px;
+      background: rgba(18,20,22,0.30); backdrop-filter: blur(20px);
+      border: 1px solid rgba(184,200,219,0.18); border-radius: 14px;
+      padding: 14px 16px;
+      display: flex; gap: 0;
+    }
+    .sim-tasks-col {
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .sim-tasks-col-title {
+      font-size: 11px; font-weight: 800; letter-spacing: 0.16em;
+      text-transform: uppercase; color: rgba(184,200,219,0.5);
+      margin-bottom: 10px;
+    }
+    .sim-tasks-divider {
+      width: 1px; background: rgba(67,71,76,0.4);
+      margin: 0 14px; flex-shrink: 0;
+    }
+    .sim-task-item {
+      display: flex; align-items: center; gap: 7px;
+      padding: 4px 0; border-bottom: 1px solid rgba(67,71,76,0.3);
+    }
+    .sim-task-item:last-child { border-bottom: none; }
+    .sim-task-check {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      border: 1.5px solid rgba(161,212,148,0.5);
+    }
+    .sim-task-label {
+      font-size: 13px; font-weight: 500; color: #e2e2e5;
+      white-space: normal; overflow-wrap: break-word; max-width: 35ch; min-width: 0;
+      transition: color 0.2s, text-decoration 0.2s;
+    }
+    .sim-task-item.done .sim-task-check {
+      background: #a1d494; border-color: #a1d494;
+    }
+    .sim-task-item.done .sim-task-label {
+      text-decoration: line-through; color: rgba(226,226,229,0.3);
+    }
+    .sim-task-item { cursor: pointer; transition: opacity 0.15s; }
+    .sim-task-item:active { opacity: 0.6; }
+    .sim-task-readonly { cursor: default; }
+    .sim-task-readonly:active { opacity: 1; }
+    .sim-tasks-empty {
+      font-size: 12px; font-weight: 500; font-style: italic;
+      color: rgba(196,198,205,0.35); padding: 4px 0; line-height: 1.5;
+    }
+
+    /* ── Card 0: photo info overlay ─────────────────────────────────────── */
+    .photo-info-overlay {
+      display: none; position: absolute; inset: 0; z-index: 50;
+      pointer-events: none; align-items: flex-end; padding: 0 0 170px 32px;
+    }
+    .photo-info-overlay.visible { display: flex; pointer-events: auto; }
+    .photo-info-panel {
+      background: rgba(18,20,22,0.82); backdrop-filter: blur(20px);
+      border: 1px solid rgba(184,200,219,0.2);
+      outline: 1px solid rgba(142,145,151,0.12);
+      border-radius: 16px; padding: 18px 44px 18px 22px;
+      max-width: 500px; position: relative;
+      animation: photoInfoIn 0.2s ease-out;
+    }
+    @keyframes photoInfoIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .photo-info-label {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.2em;
+      text-transform: uppercase; color: rgba(184,200,219,0.5); margin-bottom: 7px;
+    }
+    .photo-info-title {
+      font-size: 17px; font-weight: 700; color: #e2e2e5;
+      letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 5px;
+      word-break: break-word;
+    }
+    .photo-info-path {
+      font-size: 13px; font-weight: 500; color: #b8c8db; letter-spacing: 0.01em;
+    }
+    .photo-info-dismiss {
+      position: absolute; top: 12px; right: 12px;
+      background: none; border: none; color: rgba(196,198,205,0.45);
+      font-size: 14px; cursor: pointer; padding: 6px; border-radius: 6px; line-height: 1;
+    }
+    .photo-info-dismiss:active { color: #e2e2e5; }
+
     /* ── Card 0: stacked shortcut buttons (bottom-right) ────────────────── */
     .sim-ambient-shortcuts {
       position: absolute; bottom: 24px; right: 20px;
@@ -745,6 +860,12 @@
     }
     .sim-ambient-shortcuts .cal-ambient-shortcut-btn {
       position: relative; bottom: auto; right: auto;
+    }
+    .sim-ambient-shortcuts .cal-ambient-shortcut-btn:nth-child(1) { font-size: 25px; font-weight: 800; }
+    .sim-ambient-shortcuts .cal-ambient-shortcut-btn:nth-child(2) { font-size: 15px; font-weight: 600; }
+    .sim-ambient-shortcuts .cal-ambient-shortcut-btn:nth-child(3) {
+      font-size: 15px; font-weight: 600;
+      flex-direction: column; white-space: normal; text-align: center; gap: 4px; min-width: 0;
     }
 
     /* ── Card 3 (new): DAK-inspired Boreal Lens weather ─────────────────── */
@@ -827,7 +948,10 @@
       outline: 1px solid rgba(142,145,151,0.15); border-radius: 10px;
       padding: 9px 4px; display: flex; flex-direction: column;
       align-items: center; gap: 4px;
+      cursor: pointer; transition: outline-color 0.15s, background 0.15s;
     }
+    .sim-d-item:hover  { background: rgba(51,53,55,0.65); outline-color: rgba(184,200,219,0.3); }
+    .sim-d-item:active { background: rgba(46,62,77,0.7); outline-color: rgba(184,200,219,0.5); }
     .sim-d-dow {
       font-size: 8px; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.1em; color: #a1d494;
@@ -835,6 +959,136 @@
     .sim-d-icon { font-size: 15px; line-height: 1; }
     .sim-d-high { font-size: 13px; font-weight: 700; color: #e2e2e5; line-height: 1; }
     .sim-d-low  { font-size: 9px; color: rgba(196,198,205,0.4); }
+    /* Day detail panel — slides up inside the weather card */
+    .sim-wx-day-detail {
+      display: none; flex-direction: column; flex: 1; overflow: hidden;
+    }
+    .sim-wx-day-detail.visible {
+      display: flex; animation: simDayIn 0.22s ease-out;
+    }
+    @keyframes simDayIn {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .sim-dd-hdr {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 18px 10px 14px; flex-shrink: 0;
+    }
+    .sim-dd-back {
+      background: none; border: none; color: #b8c8db;
+      font-size: 14px; cursor: pointer; padding: 4px 8px;
+      border-radius: 6px; transition: color 0.15s; line-height: 1;
+    }
+    .sim-dd-back:hover { color: #e2e2e5; }
+    .sim-dd-title { font-size: 13px; font-weight: 600; color: #e2e2e5; flex: 1; }
+    .sim-dd-range { font-size: 11px; color: rgba(196,198,205,0.5); white-space: nowrap; }
+    .sim-dh-strip {
+      display: flex; gap: 5px; padding: 0 18px 18px 18px;
+      overflow-x: auto; flex-shrink: 0; scrollbar-width: none;
+    }
+    .sim-dh-strip::-webkit-scrollbar { display: none; }
+    .sim-dh-item {
+      flex-shrink: 0; width: 58px;
+      background: rgba(51,53,55,0.4); backdrop-filter: blur(20px);
+      outline: 1px solid rgba(142,145,151,0.15); border-radius: 10px;
+      padding: 10px 4px; display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+    }
+    .sim-dh-time {
+      font-size: 8px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: rgba(196,198,205,0.5);
+    }
+    .sim-dh-icon { font-size: 15px; line-height: 1; }
+    .sim-dh-temp { font-size: 13px; font-weight: 700; color: #e2e2e5; }
+    .sim-dh-rain { font-size: 8px; color: #7eb8f7; }
+
+    /* ── Radar overlay — covers full weather card ────────────────────────── */
+    .sim-wx-radar {
+      position: absolute; inset: 0; z-index: 20;
+      display: none; flex-direction: column;
+      background: #0d0f11;
+    }
+    .sim-wx-radar.visible {
+      display: flex; animation: simDayIn 0.22s ease-out;
+    }
+    .sim-radar-hdr {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; flex-shrink: 0;
+      background: rgba(12,14,16,0.85); backdrop-filter: blur(24px);
+      border-bottom: 1px solid rgba(67,71,76,0.35);
+    }
+    .sim-radar-title {
+      font-size: 13px; font-weight: 600; color: #e2e2e5; flex: 1;
+      letter-spacing: -0.01em;
+    }
+    .sim-radar-ts {
+      font-size: 11px; font-weight: 700; color: #b8c8db;
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .sim-radar-map-wrap {
+      flex: 1; min-height: 0; position: relative;
+    }
+    #simRadarMap {
+      position: absolute; inset: 0;
+    }
+    /* Leaflet overrides for Boreal aesthetic */
+    .leaflet-container { background: #0d0f11; font-family: 'Manrope', sans-serif; }
+    .leaflet-tile-pane { filter: saturate(0.7) brightness(0.9); }
+    .sim-radar-controls {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; flex-shrink: 0;
+      background: rgba(12,14,16,0.88); backdrop-filter: blur(16px);
+      border-top: 1px solid rgba(67,71,76,0.3);
+    }
+    /* RADAR shortcut button — lives in the hero next to the stat grid */
+    .sim-radar-shortcut {
+      background: rgba(51,53,55,0.4); backdrop-filter: blur(20px);
+      outline: 1px solid rgba(142,145,151,0.15);
+      border: none; border-radius: 10px;
+      color: #b8c8db;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 7px; padding: 12px 18px;
+      cursor: pointer; font-family: inherit;
+      align-self: stretch; flex-shrink: 0;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sim-radar-shortcut i { font-size: 39px; }
+    .sim-radar-shortcut span {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.22em;
+      color: rgba(184,200,219,0.65); text-transform: uppercase; line-height: 1;
+    }
+    .sim-radar-shortcut:hover { background: rgba(51,53,55,0.65); }
+    .sim-radar-shortcut:active { background: rgba(46,62,77,0.8); }
+
+    .sim-radar-play-btn {
+      background: rgba(51,53,55,0.5); border: 1px solid rgba(67,71,76,0.5);
+      color: #b8c8db; border-radius: 8px;
+      width: 34px; height: 34px; font-size: 12px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background 0.15s;
+    }
+    .sim-radar-play-btn:hover { background: rgba(51,53,55,0.8); }
+    .sim-radar-frame-bar {
+      flex: 1; display: flex; align-items: flex-end; gap: 3px;
+    }
+    .sim-radar-tick {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+      cursor: pointer;
+    }
+    .sim-radar-tick-lbl {
+      font-size: 7.5px; font-weight: 700; font-family: inherit;
+      color: rgba(196,198,205,0.2); letter-spacing: 0.02em;
+      line-height: 1; white-space: nowrap;
+    }
+    .sim-radar-tick-bar {
+      width: 100%; height: 4px; border-radius: 2px;
+      background: rgba(67,71,76,0.35); transition: background 0.15s;
+    }
+    .sim-radar-tick.past .sim-radar-tick-lbl { color: rgba(184,200,219,0.35); }
+    .sim-radar-tick.past .sim-radar-tick-bar  { background: rgba(184,200,219,0.25); }
+    .sim-radar-tick.active .sim-radar-tick-lbl { color: #e2e2e5; }
+    .sim-radar-tick.active .sim-radar-tick-bar  { background: #b8c8db; }
   </style>
 </head>
 <body>
@@ -854,9 +1108,41 @@
       <!-- ── Card 0: Home/Ambient ───────────────────────────────────────────── -->
       <div class="sim-card" id="simCard0">
         <div class="sim-ambient">
+          <!-- Upper-left: tasks panel (Grocery + Costco via Keep, My Tasks via Google Tasks) -->
+          <div class="sim-ambient-tasks">
+            <div class="sim-tasks-col">
+              <div class="sim-tasks-col-title">Grocery</div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Milk</span></div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Eggs</span></div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Bread</span></div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Chicken</span></div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Apples</span></div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Yogurt</span></div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Cheese</span></div>
+              <div class="sim-task-item" onclick="toggleTask(this)"><span class="sim-task-check"></span><span class="sim-task-label">Lettuce</span></div>
+            </div>
+            <div class="sim-tasks-divider"></div>
+            <div class="sim-tasks-col">
+              <div class="sim-tasks-col-title">Costco</div>
+              <div class="sim-tasks-empty">Use OK Google to add an item</div>
+            </div>
+            <div class="sim-tasks-divider"></div>
+            <div class="sim-tasks-col">
+              <div class="sim-tasks-col-title">My Tasks</div>
+              <div class="sim-task-item sim-task-readonly"><span class="sim-task-check"></span><span class="sim-task-label">Review boat insurance</span></div>
+              <div class="sim-task-item sim-task-readonly"><span class="sim-task-check"></span><span class="sim-task-label">Schedule oil change</span></div>
+              <div class="sim-task-item sim-task-readonly"><span class="sim-task-check"></span><span class="sim-task-label">Call dock contractor</span></div>
+              <div class="sim-task-item sim-task-readonly"><span class="sim-task-check"></span><span class="sim-task-label">Order dock bumpers</span></div>
+            </div>
+          </div>
           <!-- Upper-right: upcoming events mini card -->
           <div class="sim-ambient-events">
-            <div class="sim-ambient-events-title">Today</div>
+            <div class="sim-ambient-events-title">Upcoming</div>
+            <div class="sim-ambient-event allday">
+              <span class="sim-ambient-evt-time">ALL DAY</span>
+              <span class="sim-ambient-evt-title">Spring Break</span>
+              <span class="sim-ambient-evt-badge">Today</span>
+            </div>
             <div class="sim-ambient-event">
               <span class="sim-ambient-evt-time">9:00 AM</span>
               <span class="sim-ambient-evt-title">Luke – Morning Standup</span>
@@ -878,13 +1164,27 @@
               <span class="sim-ambient-evt-title">Family Dinner</span>
             </div>
           </div>
-          <!-- Bottom-left: clock + date + weather -->
+          <!-- Bottom-left: clock + date + weather pill + weather button -->
           <div class="sim-clock-large" id="simAmbientClock">12:00 PM</div>
           <div class="sim-date-large">Wednesday, April 16</div>
-          <div class="sim-wx-pill">
-            <span class="sim-wx-icon">⛅</span>
-            <span class="sim-wx-temp">58°F</span>
-            <span class="sim-wx-cond">Partly Cloudy</span>
+          <div class="sim-wx-pill-row">
+            <div class="sim-wx-pill">
+              <span class="sim-wx-icon">⛅</span>
+              <span class="sim-wx-temp">58°F</span>
+              <span class="sim-wx-cond">Partly Cloudy</span>
+            </div>
+            <button class="cal-ambient-shortcut-btn" onclick="goToCard(1)">
+              <i class="fas fa-cloud-sun" style="font-size:13px"></i>Weather
+            </button>
+          </div>
+          <!-- Photo info overlay -->
+          <div class="photo-info-overlay" id="simPhotoInfoOverlay" onclick="hideSimPhotoInfo()">
+            <div class="photo-info-panel" onclick="event.stopPropagation()">
+              <button class="photo-info-dismiss" onclick="hideSimPhotoInfo()"><i class="fas fa-times"></i></button>
+              <div class="photo-info-label">Now Showing</div>
+              <div class="photo-info-title" id="simPhotoInfoTitle"></div>
+              <div class="photo-info-path" id="simPhotoInfoPath"></div>
+            </div>
           </div>
           <!-- Bottom-right: 3 stacked shortcuts -->
           <div class="sim-ambient-shortcuts">
@@ -897,11 +1197,16 @@
                 <line x1="3" y1="10" x2="21" y2="10"/>
               </svg>Calendar
             </button>
-            <button class="cal-ambient-shortcut-btn" onclick="goToCard(1)">
-              <i class="fas fa-cloud-sun" style="font-size:13px"></i>Weather
-            </button>
             <button class="cal-ambient-shortcut-btn" onclick="goToCard(3)">
               <i class="fas fa-robot" style="font-size:13px"></i>Summary
+            </button>
+            <button class="cal-ambient-shortcut-btn" onclick="showSimPhotoInfo()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>This Picture
             </button>
           </div>
         </div>
@@ -922,33 +1227,69 @@
               <div class="sim-wx-hero-cond">Partly Cloudy</div>
               <div class="sim-wx-hero-feels">Feels like 52° · Minneapolis, MN</div>
             </div>
-            <div class="sim-wx-stat-grid">
-              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-wind"></i> Wind</div><div class="sim-wx-stat-val">8 <sub>mph SW</sub></div></div>
-              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-tint"></i> Humidity</div><div class="sim-wx-stat-val">54<sub>%</sub></div></div>
-              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-sun"></i> UV Index</div><div class="sim-wx-stat-val">3 <sub>Mod</sub></div></div>
-              <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-cloud-rain"></i> Precip</div><div class="sim-wx-stat-val">10<sub>%</sub></div></div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="sim-wx-stat-grid">
+                <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-wind"></i> Wind</div><div class="sim-wx-stat-val">8 <sub>mph SW</sub></div></div>
+                <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-tint"></i> Humidity</div><div class="sim-wx-stat-val">54<sub>%</sub></div></div>
+                <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-sun"></i> UV Index</div><div class="sim-wx-stat-val">3 <sub>Mod</sub></div></div>
+                <div class="sim-wx-stat"><div class="sim-wx-stat-lbl"><i class="fas fa-cloud-rain"></i> Precip</div><div class="sim-wx-stat-val">10<sub>%</sub></div></div>
+              </div>
+              <button class="sim-radar-shortcut" onclick="openRadar()">
+                <i class="fas fa-satellite-dish"></i>
+                <span>RADAR</span>
+              </button>
             </div>
           </div>
-          <div class="sim-wx-hdr primary">Hourly Forecast</div>
-          <div class="sim-hourly-strip">
-            <div class="sim-h-item now"><div class="sim-h-time">Now</div><div class="sim-h-icon">⛅</div><div class="sim-h-temp">58°</div></div>
-            <div class="sim-h-item"><div class="sim-h-time">2 PM</div><div class="sim-h-icon">⛅</div><div class="sim-h-temp">59°</div></div>
-            <div class="sim-h-item"><div class="sim-h-time">3 PM</div><div class="sim-h-icon">🌤️</div><div class="sim-h-temp">58°</div></div>
-            <div class="sim-h-item"><div class="sim-h-time">4 PM</div><div class="sim-h-icon">🌤️</div><div class="sim-h-temp">56°</div></div>
-            <div class="sim-h-item"><div class="sim-h-time">5 PM</div><div class="sim-h-icon">☁️</div><div class="sim-h-temp">54°</div></div>
-            <div class="sim-h-item"><div class="sim-h-time">6 PM</div><div class="sim-h-icon">☁️</div><div class="sim-h-temp">51°</div></div>
-            <div class="sim-h-item"><div class="sim-h-time">8 PM</div><div class="sim-h-icon">🌙</div><div class="sim-h-temp">47°</div></div>
-            <div class="sim-h-item"><div class="sim-h-time">10 PM</div><div class="sim-h-icon">🌙</div><div class="sim-h-temp">43°</div></div>
+          <!-- Normal view: hourly strip + daily strip -->
+          <div id="simWxNormal">
+            <div class="sim-wx-hdr primary">Hourly Forecast</div>
+            <div class="sim-hourly-strip">
+              <div class="sim-h-item now"><div class="sim-h-time">Now</div><div class="sim-h-icon">⛅</div><div class="sim-h-temp">58°</div></div>
+              <div class="sim-h-item"><div class="sim-h-time">2 PM</div><div class="sim-h-icon">⛅</div><div class="sim-h-temp">59°</div></div>
+              <div class="sim-h-item"><div class="sim-h-time">3 PM</div><div class="sim-h-icon">🌤️</div><div class="sim-h-temp">58°</div></div>
+              <div class="sim-h-item"><div class="sim-h-time">4 PM</div><div class="sim-h-icon">🌤️</div><div class="sim-h-temp">56°</div></div>
+              <div class="sim-h-item"><div class="sim-h-time">5 PM</div><div class="sim-h-icon">☁️</div><div class="sim-h-temp">54°</div></div>
+              <div class="sim-h-item"><div class="sim-h-time">6 PM</div><div class="sim-h-icon">☁️</div><div class="sim-h-temp">51°</div></div>
+              <div class="sim-h-item"><div class="sim-h-time">8 PM</div><div class="sim-h-icon">🌙</div><div class="sim-h-temp">47°</div></div>
+              <div class="sim-h-item"><div class="sim-h-time">10 PM</div><div class="sim-h-icon">🌙</div><div class="sim-h-temp">43°</div></div>
+            </div>
+            <div class="sim-wx-hdr secondary">Daily Forecast</div>
+            <div class="sim-daily-strip">
+              <div class="sim-d-item" onclick="showSimDayDetail('Wednesday, Apr 16','58°','39°','wed')"><div class="sim-d-dow">Wed</div><div class="sim-d-icon">⛅</div><div class="sim-d-high">58°</div><div class="sim-d-low">39°</div></div>
+              <div class="sim-d-item" onclick="showSimDayDetail('Thursday, Apr 17','62°','41°','thu')"><div class="sim-d-dow">Thu</div><div class="sim-d-icon">🌤️</div><div class="sim-d-high">62°</div><div class="sim-d-low">41°</div></div>
+              <div class="sim-d-item" onclick="showSimDayDetail('Friday, Apr 18','52°','40°','fri')"><div class="sim-d-dow">Fri</div><div class="sim-d-icon">🌧️</div><div class="sim-d-high">52°</div><div class="sim-d-low">40°</div></div>
+              <div class="sim-d-item" onclick="showSimDayDetail('Saturday, Apr 19','55°','37°','sat')"><div class="sim-d-dow">Sat</div><div class="sim-d-icon">⛅</div><div class="sim-d-high">55°</div><div class="sim-d-low">37°</div></div>
+              <div class="sim-d-item" onclick="showSimDayDetail('Sunday, Apr 20','61°','42°','sun')"><div class="sim-d-dow">Sun</div><div class="sim-d-icon">☀️</div><div class="sim-d-high">61°</div><div class="sim-d-low">42°</div></div>
+              <div class="sim-d-item" onclick="showSimDayDetail('Monday, Apr 21','59°','44°','mon')"><div class="sim-d-dow">Mon</div><div class="sim-d-icon">🌤️</div><div class="sim-d-high">59°</div><div class="sim-d-low">44°</div></div>
+              <div class="sim-d-item" onclick="showSimDayDetail('Tuesday, Apr 22','54°','41°','tue')"><div class="sim-d-dow">Tue</div><div class="sim-d-icon">☁️</div><div class="sim-d-high">54°</div><div class="sim-d-low">41°</div></div>
+            </div>
           </div>
-          <div class="sim-wx-hdr secondary">Daily Forecast</div>
-          <div class="sim-daily-strip">
-            <div class="sim-d-item"><div class="sim-d-dow">Wed</div><div class="sim-d-icon">⛅</div><div class="sim-d-high">58°</div><div class="sim-d-low">39°</div></div>
-            <div class="sim-d-item"><div class="sim-d-dow">Thu</div><div class="sim-d-icon">🌤️</div><div class="sim-d-high">62°</div><div class="sim-d-low">41°</div></div>
-            <div class="sim-d-item"><div class="sim-d-dow">Fri</div><div class="sim-d-icon">🌧️</div><div class="sim-d-high">52°</div><div class="sim-d-low">40°</div></div>
-            <div class="sim-d-item"><div class="sim-d-dow">Sat</div><div class="sim-d-icon">⛅</div><div class="sim-d-high">55°</div><div class="sim-d-low">37°</div></div>
-            <div class="sim-d-item"><div class="sim-d-dow">Sun</div><div class="sim-d-icon">☀️</div><div class="sim-d-high">61°</div><div class="sim-d-low">42°</div></div>
-            <div class="sim-d-item"><div class="sim-d-dow">Mon</div><div class="sim-d-icon">🌤️</div><div class="sim-d-high">59°</div><div class="sim-d-low">44°</div></div>
-            <div class="sim-d-item"><div class="sim-d-dow">Tue</div><div class="sim-d-icon">☁️</div><div class="sim-d-high">54°</div><div class="sim-d-low">41°</div></div>
+          <!-- Day detail panel — shown when a day is tapped -->
+          <div id="simWxDayDetail" class="sim-wx-day-detail">
+            <div class="sim-dd-hdr">
+              <button class="sim-dd-back" onclick="closeSimDayDetail()"><i class="fas fa-arrow-left"></i></button>
+              <span class="sim-dd-title" id="simDdTitle">Thursday, Apr 17</span>
+              <span class="sim-dd-range" id="simDdRange">High 62° · Low 41°</span>
+            </div>
+            <div class="sim-dh-strip" id="simDhStrip"></div>
+          </div>
+          <!-- Radar overlay — fullscreen over the weather card -->
+          <div id="simWxRadar" class="sim-wx-radar">
+            <div class="sim-radar-hdr">
+              <button class="sim-dd-back" onclick="closeRadar()"><i class="fas fa-arrow-left"></i></button>
+              <span class="sim-radar-title">Radar · Your City, ST</span>
+              <span class="sim-radar-ts" id="simRadarTs">—</span>
+              <button class="sim-boreal-back" onclick="goToCard(0)" title="Home"><i class="fas fa-home"></i></button>
+            </div>
+            <div class="sim-radar-map-wrap">
+              <div id="simRadarMap"></div>
+            </div>
+            <div class="sim-radar-controls">
+              <button class="sim-radar-play-btn" id="simRadarPlayBtn" onclick="toggleRadarPlay()">
+                <i class="fas fa-pause" id="simRadarPlayIcon"></i>
+              </button>
+              <div class="sim-radar-frame-bar" id="simRadarFrameBar"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1507,6 +1848,23 @@
       setTimeout(() => { prev.src = photoSrc(PHOTO_FILES[preloadIdx]); }, 2000);
     }
 
+    let _photoInfoTimer = null;
+
+    function showSimPhotoInfo() {
+      const filename = PHOTO_FILES[(_photoIndex - 1 + PHOTO_FILES.length) % PHOTO_FILES.length];
+      const name = filename.replace(/\.[^.]+$/, ''); // strip extension
+      document.getElementById('simPhotoInfoTitle').textContent = filename;
+      document.getElementById('simPhotoInfoPath').textContent = 'Photos › Boundary Waters › ' + name;
+      document.getElementById('simPhotoInfoOverlay').classList.add('visible');
+      clearTimeout(_photoInfoTimer);
+      _photoInfoTimer = setTimeout(hideSimPhotoInfo, 12000);
+    }
+
+    function hideSimPhotoInfo() {
+      clearTimeout(_photoInfoTimer);
+      document.getElementById('simPhotoInfoOverlay').classList.remove('visible');
+    }
+
     // ════════════════════════════════════════════════════════════════════════
     // MOCK DATA — Luke & Meghan (adults) + Emma, Liam, Sophia, Noah (kids)
     // April 2026. Format matches Google Calendar API response.
@@ -1597,6 +1955,9 @@
     // STATE
     // ════════════════════════════════════════════════════════════════════════
     const SIM_TODAY = new Date(2026, 3, 16); // April 16 2026 — pin for stability
+    // SIM_NOW: mock date + real time-of-day, so "Next Up" / "In Progress" demo correctly
+    const _real = new Date();
+    const SIM_NOW = new Date(2026, 3, 16, _real.getHours(), _real.getMinutes(), _real.getSeconds());
 
     let calendarViewMode   = 'day';
     let calendarMonthDate  = new Date(SIM_TODAY);
@@ -1666,20 +2027,28 @@
         html += '</div>';
       }
 
-      // ── Featured "Next Up" card — first timed event of the day
+      // ── Featured "Next Up" card
+      // For today: first event not yet ended (in-progress counts). Other days: first event.
+      const now = isToday ? SIM_NOW : new Date();
+      let featIdx = 0;
+      if (isToday && timedEvts.length) {
+        const upcoming = timedEvts.findIndex(ev => new Date(ev.end.dateTime) > now);
+        if (upcoming !== -1) featIdx = upcoming;
+      }
+
       let remaining = [...timedEvts];
       if (timedEvts.length) {
-        const feat = timedEvts[0];
-        remaining  = timedEvts.slice(1);
+        const feat = timedEvts[featIdx];
+        remaining  = [...timedEvts.slice(0, featIdx), ...timedEvts.slice(featIdx + 1)];
         const isHol = /holiday/i.test(feat.summary||'');
-        const acCls = isHol ? 'holiday' : '';
         const s  = new Date(feat.start.dateTime);
         const e  = new Date(feat.end.dateTime);
         const ts = s.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
         const te = e.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
         const loc = feat.location ? `<div class="cal-featured-location">📍 ${feat.location}</div>` : '';
-        html += `<div class="cal-featured-card ${acCls}">
-          <div class="cal-featured-label">Next Up</div>
+        const label = (isToday && new Date(feat.start.dateTime) <= now) ? 'In Progress' : 'Next Up';
+        html += `<div class="cal-featured-card${isHol ? ' holiday' : ''}">
+          <div class="cal-featured-label">${label}</div>
           <div class="cal-featured-title">${feat.summary||'(No title)'}</div>
           <div class="cal-featured-time">${ts} — ${te}</div>${loc}
         </div>`;
@@ -1883,7 +2252,7 @@
           : d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
 
         const locHtml = ev.location
-          ? `<div class="cal-sidebar-event-time">📍 ${ev.location}</div>` : '';
+          ? `<div class="cal-sidebar-event-location">📍 ${ev.location}</div>` : '';
 
         html += `<div class="${cls}">
           <div class="cal-sidebar-event-inner">
@@ -1974,6 +2343,164 @@
     const AUTO_RETURN_MS = 60000; // 60s inactivity → return to Card 0
     let _returnTimer = null;
 
+    // ════════════════════════════════════════════════════════════════════════
+    // WEATHER — day detail drill-down
+    // ════════════════════════════════════════════════════════════════════════
+    const SIM_DAY_HOURS = {
+      wed: [
+        ['12a','🌙',43,5],['1a','🌙',42,5],['2a','🌙',42,5],['3a','🌙',41,5],
+        ['4a','🌙',40,5],['5a','🌙',40,5],['6a','🌤️',41,5],['7a','🌤️',44,5],
+        ['8a','⛅',48,10],['9a','⛅',51,10],['10a','⛅',54,10],['11a','⛅',57,15],
+        ['12p','⛅',58,15],['1p','⛅',58,15],['2p','⛅',57,15],['3p','🌤️',56,10],
+        ['4p','🌤️',54,10],['5p','☁️',52,10],['6p','☁️',50,10],['7p','🌙',47,5],
+        ['8p','🌙',45,5],['9p','🌙',44,5],['10p','🌙',42,5],['11p','🌙',40,5],
+      ],
+      thu: [
+        ['12a','🌙',44,5],['1a','🌙',43,5],['2a','🌙',42,5],['3a','🌙',41,5],
+        ['4a','🌙',41,5],['5a','🌤️',42,5],['6a','🌤️',44,5],['7a','☀️',47,5],
+        ['8a','☀️',51,5],['9a','☀️',55,5],['10a','☀️',58,5],['11a','☀️',60,5],
+        ['12p','☀️',62,5],['1p','☀️',62,5],['2p','🌤️',61,10],['3p','🌤️',60,10],
+        ['4p','🌤️',58,10],['5p','⛅',55,10],['6p','⛅',52,10],['7p','☁️',50,10],
+        ['8p','🌙',48,5],['9p','🌙',47,5],['10p','🌙',46,5],['11p','🌙',44,5],
+      ],
+      fri: [
+        ['12a','☁️',43,20],['1a','🌧️',42,35],['2a','🌧️',42,50],['3a','🌧️',41,60],
+        ['4a','🌧️',41,70],['5a','🌧️',41,75],['6a','🌧️',42,80],['7a','🌧️',43,80],
+        ['8a','🌧️',44,80],['9a','🌧️',46,80],['10a','🌧️',47,75],['11a','🌦️',49,70],
+        ['12p','🌦️',50,65],['1p','🌦️',51,65],['2p','🌦️',52,60],['3p','🌦️',51,55],
+        ['4p','⛅',50,40],['5p','⛅',49,30],['6p','⛅',47,25],['7p','☁️',45,20],
+        ['8p','☁️',44,15],['9p','☁️',43,15],['10p','☁️',42,10],['11p','☁️',41,10],
+      ],
+      sat: [
+        ['12a','☁️',40,10],['1a','☁️',39,10],['2a','☁️',38,5],['3a','🌙',38,5],
+        ['4a','🌙',37,5],['5a','🌙',37,5],['6a','⛅',38,5],['7a','⛅',41,5],
+        ['8a','⛅',44,10],['9a','⛅',47,10],['10a','⛅',50,15],['11a','⛅',53,15],
+        ['12p','⛅',55,15],['1p','⛅',55,15],['2p','⛅',54,15],['3p','🌤️',53,10],
+        ['4p','🌤️',51,10],['5p','⛅',49,10],['6p','☁️',46,10],['7p','🌙',44,5],
+        ['8p','🌙',42,5],['9p','🌙',41,5],['10p','🌙',39,5],['11p','🌙',38,5],
+      ],
+      sun: [
+        ['12a','🌙',42,5],['1a','🌙',41,5],['2a','🌙',41,5],['3a','🌙',40,5],
+        ['4a','🌙',39,5],['5a','🌙',39,5],['6a','☀️',41,0],['7a','☀️',45,0],
+        ['8a','☀️',49,0],['9a','☀️',53,0],['10a','☀️',57,0],['11a','☀️',59,0],
+        ['12p','☀️',61,0],['1p','☀️',61,0],['2p','☀️',60,0],['3p','☀️',59,0],
+        ['4p','🌤️',57,5],['5p','🌤️',54,5],['6p','🌤️',51,5],['7p','🌙',49,5],
+        ['8p','🌙',47,5],['9p','🌙',46,5],['10p','🌙',44,5],['11p','🌙',43,5],
+      ],
+      mon: [
+        ['12a','🌙',44,5],['1a','🌙',44,5],['2a','🌙',43,5],['3a','🌙',43,5],
+        ['4a','🌙',42,5],['5a','🌤️',43,5],['6a','🌤️',45,5],['7a','🌤️',48,5],
+        ['8a','🌤️',51,5],['9a','☀️',54,5],['10a','🌤️',57,5],['11a','🌤️',58,10],
+        ['12p','🌤️',59,10],['1p','🌤️',59,10],['2p','🌤️',58,10],['3p','⛅',57,10],
+        ['4p','⛅',55,15],['5p','⛅',53,15],['6p','☁️',51,15],['7p','🌙',49,10],
+        ['8p','🌙',48,5],['9p','🌙',47,5],['10p','🌙',46,5],['11p','🌙',45,5],
+      ],
+      tue: [
+        ['12a','☁️',45,10],['1a','☁️',45,10],['2a','☁️',44,10],['3a','☁️',44,15],
+        ['4a','☁️',43,15],['5a','☁️',43,15],['6a','☁️',44,20],['7a','⛅',46,20],
+        ['8a','⛅',48,20],['9a','⛅',50,20],['10a','⛅',52,25],['11a','☁️',53,25],
+        ['12p','☁️',54,30],['1p','☁️',54,30],['2p','☁️',53,30],['3p','☁️',52,25],
+        ['4p','⛅',51,20],['5p','⛅',49,15],['6p','⛅',47,15],['7p','🌙',45,10],
+        ['8p','🌙',44,10],['9p','🌙',43,10],['10p','🌙',42,5],['11p','🌙',41,5],
+      ],
+    };
+
+    function showSimDayDetail(dateLabel, high, low, dayKey) {
+      document.getElementById('simDdTitle').textContent = dateLabel;
+      document.getElementById('simDdRange').textContent = `High ${high} · Low ${low}`;
+
+      const hours = SIM_DAY_HOURS[dayKey] || SIM_DAY_HOURS.thu;
+      document.getElementById('simDhStrip').innerHTML = hours.map(([t, icon, temp, rain]) => `
+        <div class="sim-dh-item">
+          <div class="sim-dh-time">${t}</div>
+          <div class="sim-dh-icon">${icon}</div>
+          <div class="sim-dh-temp">${temp}°</div>
+          <div class="sim-dh-rain">${rain > 0 ? '💧' + rain + '%' : ''}</div>
+        </div>`).join('');
+
+      document.getElementById('simWxNormal').style.display = 'none';
+      const detail = document.getElementById('simWxDayDetail');
+      detail.classList.add('visible');
+
+      // Scroll to the current-ish hour (8am = index 8)
+      setTimeout(() => {
+        const strip = document.getElementById('simDhStrip');
+        const item = strip.children[8];
+        if (item) item.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+      }, 50);
+
+      // Reset auto-return so it returns from detail → home
+      clearTimeout(_returnTimer);
+      _returnTimer = setTimeout(() => { closeSimDayDetail(); goToCard(0); }, AUTO_RETURN_MS);
+    }
+
+    function closeSimDayDetail() {
+      document.getElementById('simWxNormal').style.display = '';
+      document.getElementById('simWxDayDetail').classList.remove('visible');
+    }
+
+    // ── Task persistence: 1-hour local expiry ────────────────────────────
+    const TASK_STORAGE_KEY = 'simTasksChecked';
+    const TASK_TTL_MS = 60 * 60 * 1000;
+
+    function _loadCheckedTasks() {
+      try { return JSON.parse(localStorage.getItem(TASK_STORAGE_KEY) || '{}'); }
+      catch { return {}; }
+    }
+    function _saveCheckedTasks(map) {
+      localStorage.setItem(TASK_STORAGE_KEY, JSON.stringify(map));
+    }
+
+    function toggleTask(el) {
+      const label = el.querySelector('.sim-task-label').textContent.trim();
+      const map = _loadCheckedTasks();
+      if (el.classList.contains('done')) {
+        el.classList.remove('done');
+        delete map[label];
+      } else {
+        el.classList.add('done');
+        map[label] = Date.now();
+      }
+      _saveCheckedTasks(map);
+    }
+
+    function _initTaskStates() {
+      const map = _loadCheckedTasks();
+      const now = Date.now();
+      const updated = {};
+      document.querySelectorAll('.sim-task-item').forEach(el => {
+        const label = el.querySelector('.sim-task-label').textContent.trim();
+        if (map[label] !== undefined) {
+          if (now - map[label] < TASK_TTL_MS) {
+            el.classList.add('done');
+            updated[label] = map[label];
+          } else {
+            el.remove(); // expired → self-delete
+          }
+        }
+      });
+      _saveCheckedTasks(updated);
+    }
+
+    function _pruneExpiredTasks() {
+      const map = _loadCheckedTasks();
+      const now = Date.now();
+      document.querySelectorAll('.sim-task-item.done').forEach(el => {
+        const label = el.querySelector('.sim-task-label').textContent.trim();
+        if (!map[label] || now - map[label] >= TASK_TTL_MS) {
+          el.remove();
+        }
+      });
+      const pruned = {};
+      Object.entries(map).forEach(([k, v]) => {
+        if (now - v < TASK_TTL_MS) pruned[k] = v;
+      });
+      _saveCheckedTasks(pruned);
+    }
+
+    _initTaskStates();
+    setInterval(_pruneExpiredTasks, 60 * 1000);
+
     function goToCard(index) {
       index = Math.max(0, Math.min(TOTAL_CARDS - 1, index));
       currentCard = index;
@@ -1985,6 +2512,8 @@
       });
       updateHeaderClocks();
       if (index === 2) showCalendarView('week'); // Card 2 is Calendar
+      // Close day detail if leaving weather card
+      if (index !== 1) { closeSimDayDetail(); closeRadar(); }
       // Auto-return to home after inactivity
       clearTimeout(_returnTimer);
       if (index !== 0) {
@@ -2004,6 +2533,145 @@
       if (e.key === 'ArrowLeft')  goToCard(currentCard - 1);
       if (e.key === 'ArrowRight') goToCard(currentCard + 1);
     });
+
+    // ════════════════════════════════════════════════════════════════════════
+    // RADAR — RainViewer animated overlay (Leaflet + public tile API)
+    // ════════════════════════════════════════════════════════════════════════
+    const RADAR_LAT  = YOUR_LATITUDE;
+    const RADAR_LNG  = YOUR_LONGITUDE;
+    const RADAR_ZOOM = 7;
+    const RADAR_FPS  = 650; // ms per frame
+
+    let _radarMap     = null;
+    let _radarHost    = 'https://tilecache.rainviewer.com';
+    let _radarFrames  = [];
+    let _radarLayers  = [];
+    let _radarIdx     = 0;
+    let _radarPlaying = true;
+    let _radarTimer   = null;
+    let _radarReady   = false;
+
+    async function openRadar() {
+      document.getElementById('simWxRadar').classList.add('visible');
+      clearTimeout(_returnTimer);
+      _returnTimer = setTimeout(() => goToCard(0), AUTO_RETURN_MS);
+
+      if (!_radarReady) {
+        _radarReady = true;
+        await new Promise(r => setTimeout(r, 60)); // let DOM paint first
+        _initRadarMap();
+      } else {
+        _radarMap.invalidateSize();
+        _startRadarAnim();
+      }
+    }
+
+    function closeRadar() {
+      document.getElementById('simWxRadar').classList.remove('visible');
+      _stopRadarAnim();
+    }
+
+    function _initRadarMap() {
+      _radarMap = L.map('simRadarMap', {
+        center: [RADAR_LAT, RADAR_LNG], zoom: RADAR_ZOOM,
+        zoomControl: false, attributionControl: false,
+        scrollWheelZoom: false,
+      });
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd', maxZoom: 19,
+      }).addTo(_radarMap);
+
+      L.marker([RADAR_LAT, RADAR_LNG], {
+        icon: L.divIcon({
+          className: '',
+          html: '<span style="font-size:13px;line-height:1;color:#ffd700;text-shadow:0 0 5px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,1)">★</span>',
+          iconSize: [13, 13],
+          iconAnchor: [6, 7],
+        }),
+        interactive: false,
+      }).addTo(_radarMap);
+
+      L.marker([45.5286, -91.9996], {
+        icon: L.divIcon({
+          className: '',
+          html: '<span style="font-size:13px;line-height:1;color:#a1d494;text-shadow:0 0 5px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,1)">★</span>',
+          iconSize: [13, 13],
+          iconAnchor: [6, 7],
+        }),
+        interactive: false,
+      }).addTo(_radarMap);
+
+      _fetchRadarFrames();
+    }
+
+    async function _fetchRadarFrames() {
+      document.getElementById('simRadarTs').textContent = 'Loading…';
+      try {
+        const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+        const data = await resp.json();
+        _radarHost   = data.host;
+        _radarFrames = (data.radar.past || []).slice(-12);
+
+        // Pre-create all tile layers (all invisible); swap opacity per frame
+        _radarLayers = _radarFrames.map(f => {
+          const layer = L.tileLayer(
+            `${_radarHost}${f.path}/256/{z}/{x}/{y}/4/1_1.png`,
+            { opacity: 0, maxZoom: 14, zIndex: 200 }
+          );
+          layer.addTo(_radarMap);
+          return layer;
+        });
+
+        // Build tick bar with timestamps
+        const bar = document.getElementById('simRadarFrameBar');
+        bar.innerHTML = _radarFrames.map((f, i) => {
+          const lbl = new Date(f.time * 1000)
+            .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          return `<div class="sim-radar-tick" id="simRTick${i}">
+            <span class="sim-radar-tick-lbl">${lbl}</span>
+            <div class="sim-radar-tick-bar"></div>
+          </div>`;
+        }).join('');
+
+        _radarIdx = 0;
+        _showRadarFrame(0);
+        _startRadarAnim();
+      } catch (e) {
+        document.getElementById('simRadarTs').textContent = 'Unavailable';
+      }
+    }
+
+    function _showRadarFrame(i) {
+      _radarLayers.forEach((l, j) => l.setOpacity(j === i ? 0.65 : 0));
+      document.querySelectorAll('#simRadarFrameBar .sim-radar-tick').forEach((t, j) => {
+        t.className = 'sim-radar-tick' + (j === i ? ' active' : j < i ? ' past' : '');
+      });
+      const ts = new Date(_radarFrames[i].time * 1000);
+      document.getElementById('simRadarTs').textContent =
+        ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    }
+
+    function _startRadarAnim() {
+      _stopRadarAnim();
+      if (!_radarPlaying || _radarFrames.length === 0) return;
+      _radarTimer = setInterval(() => {
+        _radarIdx = (_radarIdx + 1) % _radarFrames.length;
+        _showRadarFrame(_radarIdx);
+      }, RADAR_FPS);
+    }
+
+    function _stopRadarAnim() {
+      clearInterval(_radarTimer);
+      _radarTimer = null;
+    }
+
+    function toggleRadarPlay() {
+      _radarPlaying = !_radarPlaying;
+      document.getElementById('simRadarPlayIcon').className =
+        _radarPlaying ? 'fas fa-pause' : 'fas fa-play';
+      _radarPlaying ? _startRadarAnim() : _stopRadarAnim();
+    }
 
     // ════════════════════════════════════════════════════════════════════════
     // CLOCK — update ambient + header clocks

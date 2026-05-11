@@ -16,19 +16,18 @@ app.use(express.json());
 app.use(express.static('public'));
 app.use(localPhotos); // Boundary Waters local photo library
 
-// Google APIs setup (for calendar and tasks)
+// Google APIs setup — Calendar + Tasks share the same OAuth2 token
 let calendar = null;
-let tasks = null;
+let tasks    = null;
 
 // Calendar allowlist — only fetch from these calendars.
-// Set CALENDAR_IDS in .env as a comma-separated list of Google Calendar IDs.
-// Example: CALENDAR_IDS=you@gmail.com,shared@group.calendar.google.com,en.usa#holiday@group.v.calendar.google.com
-const CALENDAR_ALLOWLIST = new Set(
-  (process.env.CALENDAR_IDS || '')
-    .split(',')
-    .map(id => id.trim())
-    .filter(Boolean)
-);
+// To add Birthdays later: get the calendar ID and add it here.
+const CALENDAR_ALLOWLIST = new Set([
+  'YOUR_PRIMARY_CALENDAR_ID@gmail.com',                                                                                                   // Luke - Primary
+  'YOUR_SHARED_CALENDAR_ID@group.calendar.google.com',                          // Lucas - Shared
+  'YOUR_PARTNER_CALENDAR_ID@gmail.com',                                                                                                // Meghan
+  'en.usa#holiday@group.v.calendar.google.com',                                                                           // Holidays in United States
+]);
 
 // Gemini AI setup
 let gemini = null;
@@ -59,7 +58,7 @@ try {
           // Explicitly set scopes so fromJSON doesn't silently drop them
           auth.scopes = [
             'https://www.googleapis.com/auth/calendar.readonly',
-            'https://www.googleapis.com/auth/tasks.readonly'
+            'https://www.googleapis.com/auth/tasks.readonly',
           ];
           console.log('✅ Loaded existing OAuth2 token');
         } catch (error) {
@@ -76,9 +75,8 @@ try {
         console.log('   2. Copy the generated token.json to your server');
       } else {
         calendar = google.calendar({ version: 'v3', auth });
-        tasks = google.tasks({ version: 'v1', auth });
-        console.log('✅ Google Calendar API initialized successfully with OAuth2');
-        console.log('✅ Google Tasks API initialized successfully with OAuth2');
+        tasks    = google.tasks({ version: 'v1', auth });
+        console.log('✅ Google Calendar + Tasks APIs initialized successfully with OAuth2');
       }
     } else {
       console.log('⚠️ Credentials file is not OAuth2 format (missing installed/web property)');
@@ -98,14 +96,18 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Plex Photos endpoint — navigates the year → album → photo hierarchy to return
-// a random batch of 25 photos. Each call drills into a different random year/album
-// so the slideshow rotates across the full library over time.
+// Plex Photos endpoint — samples from multiple random years per request, pools the
+// results, then randomly picks the final batch. This avoids the original single
+// year → single album selection bias where old sparse years dominated the slideshow.
+// Plex's API does not expose a flat photo list at the section level (type=13 returns
+// nothing), so the Year → Album → Photos hierarchy must be traversed. Sampling 5
+// years per call instead of 1 dramatically improves library coverage over time.
 app.get('/api/photos/:query?', async (req, res) => {
-  const plexUrl   = process.env.PLEX_URL;
-  const plexToken = process.env.PLEX_TOKEN;
-  const sectionId = process.env.PLEX_PHOTO_SECTION_ID || '11';
-  const batchSize = 25;
+  const plexUrl      = process.env.PLEX_URL;
+  const plexToken    = process.env.PLEX_TOKEN;
+  const sectionId    = process.env.PLEX_PHOTO_SECTION_ID || '11';
+  const batchSize    = 25;
+  const yearsToSample = 5; // how many random years to pool photos from per request
 
   if (!plexUrl || !plexToken) {
     console.log('⚠️ Plex not configured — PLEX_URL and PLEX_TOKEN required in .env');
@@ -115,49 +117,64 @@ app.get('/api/photos/:query?', async (req, res) => {
   try {
     const authHeaders = { Accept: 'application/json', 'X-Plex-Token': plexToken };
 
-    // Helper: fetch Metadata array from any Plex path
     async function plexGet(path) {
       const resp = await axios.get(`${plexUrl}${path}`, { headers: authHeaders });
       return resp.data.MediaContainer?.Metadata || [];
     }
 
-    // Helper: does this item need drilling into (i.e. is it a directory/album)?
-    const isDir = item => item.key && item.key.includes('/children');
+    const isContainer = item => item.key && item.key.includes('/children');
 
-    // Step 1: Get all top-level year/folder directories
-    const topItems = await plexGet(`/library/sections/${sectionId}/all`);
-    const topDirs  = topItems.filter(isDir);
-    if (topDirs.length === 0) throw new Error('No photo directories found in library');
+    // Step 1: Get all top-level year directories
+    const allYears = await plexGet(`/library/sections/${sectionId}/all`);
+    const yearDirs = allYears.filter(isContainer);
+    if (yearDirs.length === 0) throw new Error('No year directories found in photo library');
 
-    // Step 2: Pick a random top-level directory
-    const randDir  = topDirs[Math.floor(Math.random() * topDirs.length)];
-    console.log(`📷 Plex: browsing "${randDir.title}"`);
+    // Folders to exclude from slideshow rotation
+    const EXCLUDED_FOLDERS = new Set(['MEMES']);
 
-    // Step 3: Get its children — may be albums or individual photos
-    const level2      = await plexGet(randDir.key);
-    const level2Dirs  = level2.filter(isDir);
-    let   photos      = level2.filter(i => !isDir(i) && i.thumb);
+    const filteredYearDirs = yearDirs.filter(d => !EXCLUDED_FOLDERS.has(d.title));
 
-    // Step 4: If children are albums, drill into a random one
-    if (photos.length === 0 && level2Dirs.length > 0) {
-      const randAlbum = level2Dirs[Math.floor(Math.random() * level2Dirs.length)];
-      console.log(`📷 Plex: drilling into album "${randAlbum.title}"`);
-      const level3 = await plexGet(randAlbum.key);
-      photos = level3.filter(i => !isDir(i) && i.thumb);
-    }
+    // Step 2: Shuffle years and pick up to yearsToSample
+    const selectedYears = filteredYearDirs
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.min(yearsToSample, filteredYearDirs.length));
 
-    if (photos.length === 0) throw new Error(`No photos found under "${randDir.title}"`);
+    // Step 3: For each selected year, pick a random album and fetch its photos.
+    // Runs in parallel. Handles both flat (photos directly in year) and nested
+    // (albums within year) structures.
+    const photoArrays = await Promise.all(selectedYears.map(async (year) => {
+      const yearChildren = await plexGet(year.key);
+      const albums       = yearChildren.filter(isContainer);
+      const directPhotos = yearChildren.filter(i => !isContainer(i) && i.thumb);
 
-    // Shuffle and return up to batchSize
-    const selected = photos.sort(() => Math.random() - 0.5).slice(0, batchSize);
-    console.log(`📷 Plex: returning ${selected.length} photos`);
+      if (directPhotos.length > 0) {
+        return directPhotos.map(p => ({ ...p, _year: year.title, _album: null }));
+      }
+
+      if (albums.length === 0) return [];
+
+      const randomAlbum = albums[Math.floor(Math.random() * albums.length)];
+      console.log(`📷 Plex: sampling "${year.title} / ${randomAlbum.title}"`);
+      const albumPhotos = await plexGet(randomAlbum.key);
+      return albumPhotos.filter(i => !isContainer(i) && i.thumb)
+                        .map(p => ({ ...p, _year: year.title, _album: randomAlbum.title }));
+    }));
+
+    // Step 4: Pool all collected photos, shuffle, return up to batchSize
+    const allPhotos = photoArrays.flat();
+    if (allPhotos.length === 0) throw new Error('No photos found across sampled years');
+
+    const selected = allPhotos.sort(() => Math.random() - 0.5).slice(0, batchSize);
+    console.log(`📷 Plex: returning ${selected.length} photos from years: ${selectedYears.map(y => y.title).join(', ')}`);
 
     res.json({
       mediaItems: selected.map(photo => ({
-        id:              photo.ratingKey,
-        baseUrl:         `/api/photo-proxy${photo.thumb}`,
-        filename:        photo.title || '',
-        photographer:    '',   // personal family photos — no attribution
+        id:          photo.ratingKey,
+        baseUrl:     `/api/photo-proxy${photo.thumb}`,
+        filename:    photo.title || '',
+        year:        photo._year  || '',
+        album:       photo._album || '',
+        photographer:    '',
         photographerUrl: ''
       }))
     });
@@ -185,7 +202,7 @@ app.get('/api/photo-proxy/*', async (req, res) => {
 
     const imageResp = await axios.get(transcodeUrl, { responseType: 'stream' });
     res.set('Content-Type', imageResp.headers['content-type'] || 'image/jpeg');
-    res.set('Cache-Control', 'public, max-age=3600'); // Cache on the Pi for 1 hour
+    res.set('Cache-Control', 'public, max-age=300'); // 5-min cache — short enough for slideshow variety
     imageResp.data.pipe(res);
   } catch (error) {
     console.error('Plex photo proxy error:', error.message);
@@ -238,40 +255,84 @@ app.get('/api/calendar/events', async (req, res) => {
   }
 });
 
-// Google Tasks API endpoint
-app.get('/api/tasks', async (req, res) => {
+// ─────────────────────────────────────────────────────────────────────────
+// Google Keep proxy — fronts the local Python sidecar (keep_service.py) on
+// localhost:3002. The sidecar drives a headless Chromium against
+// keep.google.com via Playwright, replaying a saved auth state captured by
+// keep_login.py on the laptop. This Node process never sees credentials.
+// 60s in-memory cache: Keep has no push/webhook, but the sidecar already
+// reloads its tab on a similar interval — no need to hammer it.
+// ─────────────────────────────────────────────────────────────────────────
+const KEEP_SIDECAR_URL = process.env.KEEP_SIDECAR_URL || 'http://127.0.0.1:3002';
+const LISTS_CACHE_MS   = 60 * 1000;
+let listsCache = null;
+let listsCacheAt = 0;
+
+app.get('/api/lists', async (req, res) => {
   try {
-    if (!tasks) {
-      console.log('No Google Tasks API available, returning empty tasks data');
-      return res.json([]);
+    if (listsCache && Date.now() - listsCacheAt < LISTS_CACHE_MS) {
+      return res.json(listsCache);
     }
-
-    const response = await tasks.tasklists.list();
-    const taskLists = response.data.items || [];
-    
-    if (taskLists.length === 0) {
-      return res.json([]);
-    }
-
-    // Get tasks from the first task list (usually "My Tasks")
-    const taskListId = taskLists[0].id;
-    const tasksResponse = await tasks.tasks.list({
-      tasklist: taskListId,
-      showCompleted: false,
-      maxResults: 20
-    });
-
-    const taskItems = tasksResponse.data.items || [];
-    const formattedTasks = taskItems.map(task => ({
-      title: task.title,
-      notes: task.notes || '',
-      due: task.due || null
-    }));
-
-    res.json(formattedTasks);
+    // 30s timeout: Bill's sidecar does a Keep page-reload roughly once per
+    // minute (cache-staleness driven), and a full Keep reload takes 15–25s.
+    // Most calls return in <1s; this just covers the occasional refresh hit.
+    const r = await axios.get(`${KEEP_SIDECAR_URL}/lists`, { timeout: 30000 });
+    listsCache = r.data;
+    listsCacheAt = Date.now();
+    res.json(r.data);
   } catch (error) {
-    console.error('Error fetching tasks:', error);
-    res.json([]);
+    console.error('Keep sidecar /lists error:', error.message);
+    // Serve stale cache if we have one — better than an empty panel
+    if (listsCache) return res.json({ ...listsCache, stale: true });
+    res.status(503).json({ error: 'Keep sidecar unavailable', grocery: null, costco: null });
+  }
+});
+
+app.post('/api/lists/:listId/items/:itemId/check', async (req, res) => {
+  try {
+    await axios.post(
+      `${KEEP_SIDECAR_URL}/lists/${encodeURIComponent(req.params.listId)}/items/${encodeURIComponent(req.params.itemId)}/check`,
+      {},
+      { timeout: 10000 }
+    );
+    listsCache = null; // bust cache so next /lists fetch reflects the check
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Keep sidecar check error:', error.message);
+    res.status(502).json({ error: error.message });
+  }
+});
+
+// Google Tasks API — "My Tasks" list, incomplete items only. 5-minute cache.
+const TASKS_CACHE_MS = 5 * 60 * 1000;
+let tasksCache   = null;
+let tasksCacheAt = 0;
+
+app.get('/api/tasks', async (req, res) => {
+  if (tasksCache && Date.now() - tasksCacheAt < TASKS_CACHE_MS && !req.query.refresh) {
+    return res.json(tasksCache);
+  }
+  if (!tasks) return res.status(503).json({ error: 'Tasks API not initialized — re-auth required' });
+  try {
+    const r = await tasks.tasks.list({
+      tasklist: '@default',
+      showCompleted: false,
+      showHidden:   false,
+      maxResults:   20,
+    });
+    const items = (r.data.items || []).map(t => ({
+      id:    t.id,
+      title: t.title,
+      due:   t.due   || null,
+      notes: t.notes || null,
+    }));
+    tasksCache   = { items };
+    tasksCacheAt = Date.now();
+    res.json(tasksCache);
+  } catch (err) {
+    console.error('Tasks API error:', err.message);
+    if (tasksCache) return res.json({ ...tasksCache, stale: true });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -358,7 +419,7 @@ app.get('/api/weather', async (req, res) => {
     }
 
     const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index&hourly=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation_probability,wind_gusts_10m,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America/Chicago`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index&hourly=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation_probability,wind_gusts_10m,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America/Chicago`
     );
 
     const contentType = response.headers.get('content-type') ?? '';
@@ -379,6 +440,25 @@ app.get('/api/weather', async (req, res) => {
 // Cache for hourly summary to avoid repeated API calls
 let summaryCache = null;
 let summaryCacheHour = null;
+let summaryInFlight = false; // prevents duplicate Gemini calls on concurrent requests
+
+const SUMMARY_CACHE_FILE = path.join(__dirname, 'summary-cache.json');
+
+// Load persisted summary cache on startup — survives PM2 restarts within the same hour
+try {
+  const fs = require('fs');
+  if (fs.existsSync(SUMMARY_CACHE_FILE)) {
+    const saved = JSON.parse(fs.readFileSync(SUMMARY_CACHE_FILE, 'utf8'));
+    const savedHour = new Date(saved.timestamp).getHours();
+    if (savedHour === new Date().getHours()) {
+      summaryCache = saved;
+      summaryCacheHour = savedHour;
+      console.log('✅ Loaded persisted summary cache from disk');
+    }
+  }
+} catch (e) {
+  console.log('⚠️ Could not load summary cache from disk:', e.message);
+}
 
 // Hourly Summary API endpoint using Gemini AI
 app.get('/api/summary', async (req, res) => {
@@ -397,6 +477,15 @@ app.get('/api/summary', async (req, res) => {
       return res.json(summaryCache);
     }
 
+    // Prevent duplicate Gemini calls — if generation is already in flight,
+    // serve stale cache if available, otherwise ask the client to retry
+    if (!isRefreshRequest && summaryInFlight) {
+      if (summaryCache) return res.json({ ...summaryCache, note: 'Generating update, serving cached' });
+      return res.status(503).json({ error: 'Summary generating, retry in 20 seconds' });
+    }
+
+    summaryInFlight = true;
+
     if (!gemini) {
       const fallbackSummary = {
         summary: "Hourly summary is not available. Please configure Gemini API key.",
@@ -411,11 +500,11 @@ app.get('/api/summary', async (req, res) => {
     const timeout = 10000; // 10 second timeout
     const [weatherResponse, hourlyWeatherResponse, calendarResponse] = await Promise.allSettled([
       Promise.race([
-        axios.get(`http://localhost:${PORT}/api/weather?lat=${process.env.LATITUDE}&lon=${process.env.LONGITUDE}`),
+        axios.get(`http://localhost:${PORT}/api/weather?lat=${process.env.LATITUDE || 'YOUR_LATITUDE'}&lon=${process.env.LONGITUDE || 'YOUR_LONGITUDE'}`),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Weather timeout')), timeout))
       ]),
       Promise.race([
-        axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${process.env.LATITUDE}&longitude=${process.env.LONGITUDE}&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,uv_index&temperature_unit=fahrenheit&timezone=auto`),
+        axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${process.env.LATITUDE || 'YOUR_LATITUDE'}&longitude=${process.env.LONGITUDE || 'YOUR_LONGITUDE'}&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,uv_index&temperature_unit=fahrenheit&timezone=auto`),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Hourly weather timeout')), timeout))
       ]),
       Promise.race([
@@ -424,14 +513,10 @@ app.get('/api/summary', async (req, res) => {
       ])
     ]);
 
-    // Skip tasks API for now due to permission issues
-    const tasksResponse = { status: 'rejected', reason: new Error('Tasks API not available') };
-
     // Prepare data for AI
     const weatherData = weatherResponse.status === 'fulfilled' ? weatherResponse.value.data : null;
     const hourlyWeatherData = hourlyWeatherResponse.status === 'fulfilled' ? hourlyWeatherResponse.value.data : null;
     const calendarData = calendarResponse.status === 'fulfilled' ? calendarResponse.value.data : [];
-    const tasksData = tasksResponse.status === 'fulfilled' ? tasksResponse.value.data : [];
 
     // Get current time context
     const now = new Date();
@@ -442,8 +527,7 @@ app.get('/api/summary', async (req, res) => {
     // Temperature data is already in Fahrenheit (API called with temperature_unit=fahrenheit)
 
     // Format data for AI prompt
-    const city = process.env.CITY || 'your area';
-    const householdName = process.env.HOUSEHOLD_NAME || 'the household';
+    const city = process.env.CITY || 'Your City, ST';
     let dataSummary = `Location: ${city}. `;
     
     if (weatherData && hourlyWeatherData) {
@@ -554,40 +638,6 @@ app.get('/api/summary', async (req, res) => {
       dataSummary += `Calendar Events: No upcoming events scheduled. `;
     }
     
-    if (tasksData && tasksData.length > 0) {
-      // Validate and filter tasks to prevent hallucination
-      const validTasks = tasksData.filter(task => {
-        // Ensure task has required properties
-        if (!task || !task.title) {
-          return false;
-        }
-        
-        // Validate task title is not empty or suspicious
-        const title = task.title.trim();
-        if (!title || title.length < 1 || title.length > 200) {
-          return false;
-        }
-        
-        // Check for suspicious patterns that might indicate mock data
-        const suspiciousPatterns = ['mock', 'test', 'example', 'sample', 'placeholder'];
-        if (suspiciousPatterns.some(pattern => title.toLowerCase().includes(pattern))) {
-          return false;
-        }
-        
-        return true;
-      });
-      
-      if (validTasks.length > 0) {
-        console.log('Valid tasks being sent to Gemini:', validTasks.length);
-        dataSummary += `Tasks: ${validTasks.map(task => task.title).join(', ')}. `;
-      } else {
-        console.log('No valid tasks found, sending empty tasks data to Gemini');
-        dataSummary += `Tasks: No pending tasks. `;
-      }
-    } else {
-      dataSummary += `Tasks: No pending tasks. `;
-    }
-
     // Get user name from query parameter or use default
     const userName = req.query.name || 'the family';
 
@@ -606,7 +656,7 @@ app.get('/api/summary', async (req, res) => {
 ` : '';
 
     // Create AI prompt
-    const prompt = `Here is today's data for ${householdName}:
+    const prompt = `Here is today's data for the Davis household:
 
 ${dataSummary}
 
@@ -644,21 +694,43 @@ ${sailingSection}
 
 Return ONLY the HTML. No preamble, no explanation, no code fences.`;
 
-    // Generate summary using Gemini with timeout.
-    // HOUSEHOLD_DESCRIPTION lets you give the model context about who lives there
-    // (names, ages, interests) so the briefing is personalized. Optional — falls back to generic.
-    const householdDescription = process.env.HOUSEHOLD_DESCRIPTION
-      || `a household in ${city}`;
-    const systemInstruction = `You are a home assistant dashboard for ${householdDescription}. The audience is the whole household — keep it warm but useful, not corporate. Today's content is below.`;
+    // Generate summary using Gemini with timeout
+    const systemInstruction = `[YOUR FAMILY NAME] family home assistant in [YOUR CITY, STATE]. Household: [DESCRIBE YOUR HOUSEHOLD MEMBERS AND ROLES]. Audience is the whole family — keep it warm but useful, not corporate. Today's content is below.`;
 
     const model = gemini.getGenerativeModel({
       model: "gemini-2.5-flash",
       systemInstruction: systemInstruction
     });
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('AI generation timeout')), 60000))
-    ]);
+
+    // Single Gemini call wrapped in timeout
+    async function callGemini() {
+      return Promise.race([
+        model.generateContent(prompt),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AI generation timeout')), 60000))
+      ]);
+    }
+
+    // One automatic retry on 429 — uses the retryDelay Gemini provides in the error
+    let result;
+    try {
+      result = await callGemini();
+    } catch (error) {
+      if (error.status === 429) {
+        const retryDelayMs = (() => {
+          try {
+            const retryInfo = error.errorDetails?.find(d => d['@type']?.includes('RetryInfo'));
+            const delayStr = retryInfo?.retryDelay || '15s';
+            return (parseInt(delayStr) || 15) * 1000;
+          } catch { return 15000; }
+        })();
+        console.log(`⚠️ Gemini 429 — retrying after ${retryDelayMs / 1000}s`);
+        await new Promise(r => setTimeout(r, retryDelayMs));
+        result = await callGemini();
+      } else {
+        throw error;
+      }
+    }
+
     const response = await result.response;
     const summary = response.text();
 
@@ -667,20 +739,28 @@ Return ONLY the HTML. No preamble, no explanation, no code fences.`;
       timestamp: new Date().toISOString(),
       data: {
         weather: weatherData ? 'Available' : 'Not available',
-        calendar: calendarData.length,
-        tasks: tasksData.length
+        calendar: calendarData.length
       }
     };
 
     // Cache the result for the hour
     summaryCache = summaryData;
     summaryCacheHour = cacheHour;
+    summaryInFlight = false;
+
+    // Persist to disk so cache survives PM2 restarts within the same hour
+    try {
+      require('fs').writeFileSync(SUMMARY_CACHE_FILE, JSON.stringify(summaryData));
+    } catch (e) {
+      console.log('⚠️ Could not persist summary cache to disk:', e.message);
+    }
 
     res.json(summaryData);
 
   } catch (error) {
     console.error('Error generating daily summary:', error);
-    
+    summaryInFlight = false;
+
     // Return cached data if available, otherwise fallback
     if (summaryCache) {
       return res.json({

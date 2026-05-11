@@ -8,9 +8,9 @@
  *   GET /photos/:file       → static file serving for the photos themselves
  *
  * Pi paths:
- *   App root : /home/luke/SmartDisplayPi/
- *   Photos   : /home/luke/SmartDisplayPi/public/photos/
- *   This file: /home/luke/SmartDisplayPi/local-photos-router.js
+ *   App root : /home/YOUR_PI_USER/SmartDisplayPi/
+ *   Photos   : /home/YOUR_PI_USER/SmartDisplayPi/public/photos/
+ *   This file: /home/YOUR_PI_USER/SmartDisplayPi/local-photos-router.js
  *
  * Installation (in the Pi's server.js — see deployment instructions):
  *   const localPhotos = require('./local-photos-router');
@@ -32,11 +32,13 @@ const VALID_EXT  = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 router.get('/api/local-photos', (req, res) => {
     try {
         if (!fs.existsSync(PHOTOS_DIR)) {
+            console.log('[local-photos] Directory not found:', PHOTOS_DIR);
             return res.json({ files: [] });
         }
         const files = fs.readdirSync(PHOTOS_DIR)
             .filter(f => VALID_EXT.has(path.extname(f).toLowerCase()))
             .sort();
+        console.log(`[local-photos] Serving ${files.length} photos from ${PHOTOS_DIR}`);
         res.json({ files });
     } catch (err) {
         console.error('[local-photos] Error reading photos directory:', err.message);
