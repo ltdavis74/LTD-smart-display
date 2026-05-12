@@ -58,7 +58,7 @@ try {
           // Explicitly set scopes so fromJSON doesn't silently drop them
           auth.scopes = [
             'https://www.googleapis.com/auth/calendar.readonly',
-            'https://www.googleapis.com/auth/tasks.readonly',
+            'https://www.googleapis.com/auth/tasks',
           ];
           console.log('✅ Loaded existing OAuth2 token');
         } catch (error) {
@@ -250,8 +250,10 @@ app.get('/api/calendar/events', async (req, res) => {
 
     res.json(merged);
   } catch (error) {
-    console.error('Error fetching calendar events:', error);
-    res.json([]);
+    // 503 (not 200+[] or mock data) so the frontend retry path triggers.
+    // Insights 2026-04-08: frontend retries 5×2s on 503 or network error.
+    console.error('Error fetching calendar events:', error.message);
+    res.status(503).json({ error: 'Calendar fetch failed, retry shortly' });
   }
 });
 
@@ -336,6 +338,23 @@ app.get('/api/tasks', async (req, res) => {
   }
 });
 
+// Mark a Google Task as completed. Busts the tasks cache so the next poll reflects it.
+app.post('/api/tasks/:taskId/complete', async (req, res) => {
+  if (!tasks) return res.status(503).json({ error: 'Tasks API not initialized' });
+  try {
+    await tasks.tasks.patch({
+      tasklist: '@default',
+      task: req.params.taskId,
+      requestBody: { status: 'completed' },
+    });
+    tasksCache = null;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Task complete error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Google Calendar API endpoint — rolling 7-day agenda (default) or arbitrary range.
 // Optional query params: ?start=YYYY-MM-DD&end=YYYY-MM-DD
 // Used by the rolling agenda view (no params) and month grid view (with params).
@@ -389,19 +408,12 @@ app.get('/api/calendar/agenda', async (req, res) => {
 
     res.json(merged);
   } catch (error) {
-    console.error('Error fetching calendar agenda:', error);
-    // Return mock data on error
-    const mockEvents = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
-      mockEvents.push({
-        id: `mock${i + 1}`,
-        summary: `Event ${i + 1}`,
-        start: { dateTime: new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString() },
-        end: { dateTime: new Date(date.getTime() + 10 * 60 * 60 * 1000).toISOString() }
-      });
-    }
-    res.json(mockEvents);
+    // 503 so the frontend retry path triggers. Previously returned fabricated
+    // mock events on error, which masked invalid_grant failures and made the
+    // calendar appear partially functional. Flagged in insights 2026-04-16
+    // as a known bad pattern; fixed 2026-05-12.
+    console.error('Error fetching calendar agenda:', error.message);
+    res.status(503).json({ error: 'Calendar fetch failed, retry shortly' });
   }
 });
 

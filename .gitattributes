@@ -1,0 +1,58 @@
+# Enforce LF line endings for all text files in this repo.
+#
+# Why: this repo deploys to a Linux Pi (Bash, Node, Playwright). Shell
+# scripts will not execute under CRLF endings, and the codebase was
+# silently re-encoded once already (May 2026) — a 10K-line phantom diff
+# almost landed in main. This file is the guard rail.
+#
+# Behavior:
+#   * text=auto eol=lf  → git auto-detects text vs binary; text files
+#                         are normalized to LF in the index AND in the
+#                         working tree, regardless of OS or editor.
+#
+# After landing this file, any tool that writes CRLF will be silently
+# normalized back to LF on `git add`. To proactively fix an already-
+# CRLF working tree on Windows: `git add --renormalize .`
+
+* text=auto eol=lf
+
+# Shell scripts MUST be LF — executed on the Pi via bash/labwc autostart.
+*.sh   text eol=lf
+
+# JS / Node — LF expected
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.cjs  text eol=lf
+*.json text eol=lf
+
+# Web assets — LF expected
+*.html text eol=lf
+*.css  text eol=lf
+
+# Python — LF expected (Pi venv runs these)
+*.py   text eol=lf
+
+# Docs and config — LF expected
+*.md   text eol=lf
+*.txt  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+.gitignore        text eol=lf
+.gitattributes    text eol=lf
+.env.example      text eol=lf
+
+# Binary files — never touch
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.bin   binary

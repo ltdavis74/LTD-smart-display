@@ -635,11 +635,23 @@ class SmartDisplay {
         }
         const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         el.innerHTML = items.map(it =>
-            `<div class="task-item task-item--readonly">` +
+            `<div class="task-item" data-task-id="${it.id}">` +
             `<span class="task-check"></span>` +
             `<span class="task-label">${esc(it.title)}</span>` +
             `</div>`
         ).join('');
+        el.querySelectorAll('.task-item').forEach(item => {
+            item.addEventListener('click', () =>
+                this.completeTask(item.dataset.taskId, item)
+            );
+        });
+    }
+
+    completeTask(taskId, el) {
+        el.classList.add('done');
+        setTimeout(() => el.remove(), 400);
+        fetch(`/api/tasks/${encodeURIComponent(taskId)}/complete`, { method: 'POST' })
+            .catch(e => console.error('Failed to complete task:', e));
     }
 
     renderListCol(el, listId, items) {

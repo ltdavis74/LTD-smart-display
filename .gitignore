@@ -6,6 +6,7 @@ background images/
 .venv/
 __pycache__/
 keep_auth.json
+keep_startup.png
 token.json
 client_secret*.json
 .claude/settings.local.json
