@@ -56,17 +56,17 @@
 - [x] **Home button opacity:** all `.ha-back-btn` instances set to full-opacity `#b8c8db` (was faded `#666`)
 
 ### Card 0 — Google Keep Lists Panel (Session 3–4)
-The native Google Tasks/Keep APIs and master-token flows were both blocked by Google's anti-abuse systems. Current working architecture uses a Playwright sidecar on a separate Ubuntu machine ("Bill") that drives headless Chromium against keep.google.com using a saved real-browser auth session.
+The native Google Tasks/Keep APIs and master-token flows were both blocked by Google's anti-abuse systems. Current working architecture uses a Playwright sidecar on a separate Ubuntu machine ("YOUR_SERVER") that drives headless Chromium against keep.google.com using a saved real-browser auth session.
 
 - [x] **Auth pivot:** gkeepapi/master-token → Playwright (master-token blocked categorically; Playwright drives real browser session)
-- [x] **Bill sidecar (`keep_service.py`):** Playwright + Flask on port 3002; sync threaded=False (Playwright objects are thread-bound)
-- [x] **Laptop auth capture (`keep_login.py`):** mints `keep_auth.json` from a real Chrome login; SCP'd to Bill
-- [x] **Express proxy (`/api/lists`):** `server.js` forwards to Bill:3002 with 60s cache
+- [x] **YOUR_SERVER sidecar (`keep_service.py`):** Playwright + Flask on port 3002; sync threaded=False (Playwright objects are thread-bound)
+- [x] **Laptop auth capture (`keep_login.py`):** mints `keep_auth.json` from a real Chrome login; SCP'd to YOUR_SERVER
+- [x] **Express proxy (`/api/lists`):** `server.js` forwards to YOUR_SERVER:3002 with 60s cache
 - [x] **Card 0 lists panel:** `loadLists`/`renderListCol`/`checkItem` in `app.js`; polls every 60s; supports Grocery + Costco lists by title match
 - [x] **Role-based selectors:** `[role="listitem"]`, `[role="checkbox"]` — stable across Keep CSS redesigns; debug endpoints at `/debug/extract` and `/debug/html`
 - [x] **PM2 manifest (`ecosystem.config.js`):** manages both Node server and Python sidecar; venv at `.venv/bin/python`
 - [x] **Voice flow preserved:** "OK Google, add X to grocery list" → Keep → display reads it. Display is read+check-off only; no write/add needed.
-- [x] **Re-auth ritual documented:** run `keep_login.py` on laptop → SCP `keep_auth.json` to Bill → `pm2 restart keep`
+- [x] **Re-auth ritual documented:** run `keep_login.py` on laptop → SCP `keep_auth.json` to YOUR_SERVER → `pm2 restart keep`
 
 ### Infrastructure
 - [x] `kiosk.sh` created with correct Wayland flags and `/usr/lib/chromium/chromium` binary

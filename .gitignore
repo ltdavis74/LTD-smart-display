@@ -11,3 +11,9 @@ token.json
 client_secret*.json
 .claude/settings.local.json
 .claude/launch.json
+
+# local photo library (Pi-only) + runtime/editor cruft
+public/photos/
+summary-cache.json
+*.bak
+.DS_Store

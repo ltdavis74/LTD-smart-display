@@ -66,8 +66,9 @@ def save_and_exit(context, label):
     print(f"  ✓ Wrote {OUT} ({size_kb:.1f} KB) via {label}")
     print()
     print("  Next steps:")
-    print(f"    1. WinSCP {OUT.name} to the Pi:  ~/SmartDisplayPi/{OUT.name}")
-    print( "    2. On the Pi:                     pm2 restart keep")
+    print(f"    1. WinSCP {OUT.name} to YOUR_SERVER:  /home/YOUR_PI_USER/keep-mirror/{OUT.name}")
+    print( "    2. On YOUR_SERVER:                    sudo systemctl restart keep-mirror.service")
+    print( "    3. Verify on YOUR_SERVER:             curl -s http://127.0.0.1:3002/health   (want authed:true)")
 
 
 def stealth_launch():
@@ -164,9 +165,10 @@ def cdp_attach(port: int):
         print(f"  ✓ Wrote {OUT} ({size_kb:.1f} KB) via CDP attach")
         print()
         print("  Next steps:")
-        print(f"    1. WinSCP {OUT.name} to the Pi:  ~/SmartDisplayPi/{OUT.name}")
-        print( "    2. On the Pi:                     pm2 restart keep")
-        print( "    3. You can close that Chrome window now.")
+        print(f"    1. WinSCP {OUT.name} to YOUR_SERVER:  /home/YOUR_PI_USER/keep-mirror/{OUT.name}")
+        print( "    2. On YOUR_SERVER:                    sudo systemctl restart keep-mirror.service")
+        print( "    3. Verify on YOUR_SERVER:             curl -s http://127.0.0.1:3002/health   (want authed:true)")
+        print( "    4. You can close that Chrome window now.")
 
 
 def main():

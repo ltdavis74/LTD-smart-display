@@ -9,16 +9,16 @@
 A Raspberry Pi–based smart home display running at 1024×600 in a Chromium kiosk. It shows a rotating carousel of full-screen cards: an ambient photo background with a clock and shortcuts, a live weather card, an interactive calendar, and a Gemini AI–generated daily summary. The aesthetic is called **Boreal** — dark glassmorphism over Boundary Waters photography.
 
 The project lives in two places simultaneously:
-- **Development machine (Windows):** `C:\Users\ltdav\OneDrive\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project\repo\`
-- **Pi deployment:** `/home/YOUR_PI_USER/SmartDisplayPi/` on `YOUR_PI_HOSTNAME` (user: `YOUR_PI_USER`)
+- **Development machine (Windows):** `C:\Projects\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project\repo\`
+- **Pi deployment:** `/home/YOUR_PI_USER/SmartDisplayPi/` on `YOUR_PI_HOSTNAME` (user: `YOUR_PI_USER`) — as of 2026-05-29 this is a **git clone of the `YOUR_PRIVATE_REPO` fork** (it previously sat on the upstream `Piflyer` remote with uncommitted edits). Web assets are under `public/`; `server.js` + `package.json` at root. Deploy with `git pull && pm2 restart smart-display`.
 
-**Project record (Cowork):** Full build log, issue tracker, findings, and task state live in the Cowork project folder at `C:\Users\ltdav\OneDrive\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project\`. Key files: `insights.md` (immutable findings log — read before starting technical work), `todos.md` (task tracker), `technical_rules.md` (non-negotiable build constraints). After completing significant work, log a dated summary entry in `insights.md`. Do not leave Claude Code session work undocumented — the Cowork record is the authoritative project history.
+**Project record (Cowork):** Full build log, issue tracker, findings, and task state live in the Cowork project folder at `C:\Projects\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project\`. Key files: `insights.md` (immutable findings log — read before starting technical work), `todos.md` (task tracker), `technical_rules.md` (non-negotiable build constraints). After completing significant work, log a dated summary entry in `insights.md`. Do not leave Claude Code session work undocumented — the Cowork record is the authoritative project history.
 
 **GitHub:** Private repo `https://github.com/YOUR_GITHUB_USERNAME/YOUR_PRIVATE_REPO` (personal config intact). Public repo `https://github.com/ltdavis74/LTD-smart-display` (scrubbed). Private is canonical — changes flow private → scrub → public, never the reverse.
 
 **NEVER push directly to the public repo.** Always sync via the wrapper script from the project root:
 ```powershell
-cd "C:\Users\ltdav\OneDrive\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project"
+cd "C:\Projects\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project"
 .\sync_to_public.ps1
 ```
 The script runs the scrubber, verifies no personal data leaked, then commits and pushes. Skipping it risks exposing personal data publicly.
@@ -199,7 +199,7 @@ pm2 restart all && sudo systemctl restart lightdm
 
 **Never run `kiosk.sh` from SSH.** It must be launched inside a Wayland session (LightDM autostart). The file is in the project root for reference and Pi deployment only.
 
-**WinSCP workflow:** Edit files on Windows, sync to Pi via WinSCP, then SSH to restart.
+**Deploy workflow (updated 2026-05-29):** the Pi is now a git clone of the `YOUR_PRIVATE_REPO` fork. Commit/push from Windows, then on the Pi: `cd ~/SmartDisplayPi && git pull && pm2 restart smart-display` (run `npm ci` first only when `package-lock.json` changed; append `&& sudo systemctl restart lightdm` for frontend changes that need a kiosk reload). The old WinSCP edit-and-sync flow is retired. Note: the Cowork sandbox can't drive git — commits are authored in PowerShell 7 on Windows.
 
 ---
 

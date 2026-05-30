@@ -1,22 +1,40 @@
 {
-  "name": "smart-display",
-  "version": "0.1.0",
-  "description": "A Raspberry Pi kiosk dashboard — family photos, weather, calendar, and an AI-generated daily briefing.",
+  "name": "smart-display-2",
+  "version": "1.0.0",
+  "description": "Raspberry Pi Smart Display with Google Photos, Calendar, and Home Assistant",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "dev": "nodemon server.js",
+    "test": "node test-server.js",
+    "build": "webpack --mode production",
+    "build-dev": "webpack --mode development"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "axios": "^1.7.0",
+    "@google-cloud/local-auth": "^2.1.0",
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.6.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.0",
-    "googleapis": "^144.0.0"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "googleapis": "^128.0.0",
+    "node-cron": "^3.0.3"
   },
+  "devDependencies": {
+    "css-loader": "^6.8.1",
+    "html-webpack-plugin": "^5.5.3",
+    "nodemon": "^3.0.1",
+    "style-loader": "^3.3.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "keywords": [
+    "raspberry-pi",
+    "smart-display",
+    "google-photos",
+    "google-calendar",
+    "home-assistant"
+  ],
+  "author": "Smart Display Team",
   "license": "MIT"
 }

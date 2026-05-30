@@ -275,7 +275,7 @@ app.get('/api/lists', async (req, res) => {
     if (listsCache && Date.now() - listsCacheAt < LISTS_CACHE_MS) {
       return res.json(listsCache);
     }
-    // 30s timeout: Bill's sidecar does a Keep page-reload roughly once per
+    // 30s timeout: YOUR_SERVER's sidecar does a Keep page-reload roughly once per
     // minute (cache-staleness driven), and a full Keep reload takes 15–25s.
     // Most calls return in <1s; this just covers the occasional refresh hit.
     const r = await axios.get(`${KEEP_SIDECAR_URL}/lists`, { timeout: 30000 });
