@@ -51,52 +51,81 @@ re-running `keep_login.py` re-mints it.
 
 ---
 
-## Routine re-auth (the common case — ~2 minutes)
+## Routine re-auth (the common case)
 
 This is what you do when the Lists panel goes blank / "Keep service offline".
 You'll typically need it every few weeks to months as cookies decay.
 
-### 1. Capture a fresh session on Windows
+**Capture on YOUR_SERVER — the durable method (confirmed multi-day 2026-06-10).** Prior
+captures done on the Windows laptop and replayed from YOUR_SERVER died within hours because
+Google's session-risk engine treats a device/IP mismatch as a hijack. Capturing
+directly on YOUR_SERVER eliminates the mismatch.
 
-From the repo folder, in the project `.venv` (PowerShell 7):
+### 1. SSH to YOUR_SERVER with X forwarding
 
-```powershell
-cd "C:\Projects\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project\repo"
-& ".\.venv\Scripts\python.exe" keep_login.py
+Use the **MobaXterm saved session** for YOUR_SERVER (not a typed `ssh` command — the saved
+session is required for X forwarding to work). YOUR_SERVER's SSH is on port 2222.
+
+Once connected, verify the display is set:
+
+```bash
+echo $DISPLAY    # must be non-empty, e.g. localhost:10.0
 ```
 
-A real Chrome window opens at `keep.google.com`. Sign in fully (2FA,
-security keys — whatever your account needs). When you can see your notes
-grid, switch back to the terminal and press **ENTER**. The script writes
-`keep_auth.json` into the repo folder and closes the browser.
+### 2. Launch Chromium on YOUR_SERVER with remote debugging
 
-If Google says "Couldn't sign you in / this browser may not be secure,"
-Ctrl+C and re-run with `--cdp` (the script prints CDP instructions).
-
-> If `.venv` doesn't exist (e.g. after a machine migration), recreate it —
-> a venv is **not** portable, don't copy an old one:
-> ```powershell
-> py -m venv .venv
-> & ".\.venv\Scripts\python.exe" -m pip install playwright
-> & ".\.venv\Scripts\python.exe" -m playwright install chromium
-> ```
-
-### 2. WinSCP the file to **YOUR_SERVER** (not the Pi)
-
-```
-local:   ...\repo\keep_auth.json
-remote:  /home/YOUR_PI_USER/keep-mirror/keep_auth.json   (overwrite)
+```bash
+CHROME=/home/YOUR_PI_USER/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome
+"$CHROME" \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/home/YOUR_PI_USER/keep-capture-profile \
+  --no-sandbox \
+  https://keep.google.com &
 ```
 
-### 3. Restart and verify on YOUR_SERVER
+> `--no-sandbox` is required on this Ubuntu version (AppArmor restricts unprivileged
+> user namespaces). The `keep-capture-profile` directory gives YOUR_SERVER a consistent
+> browser fingerprint across re-auths — keep it on disk.
+>
+> If the Chromium binary path above stops working after a Playwright update, find it
+> with: `ls /home/YOUR_PI_USER/.cache/ms-playwright/chromium-*/chrome-linux64/chrome`
+
+A Chromium window opens on your Windows desktop via MobaXterm. Sign in fully —
+2FA, and click **Trust this device** if offered. Wait until the Keep notes grid is
+fully visible.
+
+### 3. Capture the session via CDP
+
+Open a **second** SSH session to YOUR_SERVER (double-click the saved session again in
+MobaXterm). The first session's terminal is busy with Chromium output.
+
+```bash
+cd /home/YOUR_PI_USER/keep-mirror
+.venv/bin/python keep_login.py --cdp 9222
+```
+
+The script prints Windows-style CDP setup instructions — **ignore them**. Chromium
+is already running and signed in. Press **ENTER** when prompted. Success output:
+
+```
+✓ Wrote /home/YOUR_PI_USER/keep-mirror/keep_auth.json (N.N KB) via CDP attach
+```
+
+The file is already in the right place. Ignore the "WinSCP to YOUR_SERVER" line in the
+printed next steps.
+
+### 4. Restart and verify on YOUR_SERVER
 
 ```bash
 sudo systemctl restart keep-mirror.service
-sleep 12
+sleep 20
 curl -s http://127.0.0.1:3002/health; echo      # want "authed": true
 ```
 
-### 4. Confirm end-to-end from the Pi
+If `authed: false` after 20s, wait another 20s and retry — headless Chromium takes
+time to hydrate the Keep page.
+
+### 5. Confirm end-to-end from the Pi
 
 ```bash
 curl -s http://YOUR_PLEX_SERVER_IP:3002/health; echo
@@ -104,6 +133,31 @@ curl -s http://localhost:3000/api/lists; echo    # grocery + costco populated
 ```
 
 The display's Lists panel repopulates within ~60s on its own.
+
+---
+
+### Fallback: capture on Windows laptop
+
+If YOUR_SERVER-side capture is not possible (YOUR_SERVER is down, MobaXterm unavailable), you can
+capture on the Windows laptop and WinSCP the file to YOUR_SERVER. Sessions captured this
+way are shorter-lived (hours, not days/weeks) due to the device/IP mismatch.
+
+From the repo folder in PowerShell 7:
+
+```powershell
+cd "C:\Projects\CLAUDEHOME\Smart Calendar\Interactive Smart Family Hub Project\repo"
+& ".\.venv\Scripts\python.exe" keep_login.py
+```
+
+Then WinSCP `keep_auth.json` to YOUR_SERVER at `/home/YOUR_PI_USER/keep-mirror/keep_auth.json`
+and restart the service as in step 4 above.
+
+> If `.venv` doesn't exist, recreate it — venvs are not portable:
+> ```powershell
+> py -m venv .venv
+> & ".\.venv\Scripts\python.exe" -m pip install playwright
+> & ".\.venv\Scripts\python.exe" -m playwright install chromium
+> ```
 
 ---
 
